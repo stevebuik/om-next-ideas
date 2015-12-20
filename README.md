@@ -21,6 +21,8 @@ run devcards
 ## Ideas
 
 - separation of concerns: using msgs (schema not defrecord = more flex e.g. case or multimethod better errors) from view components
+- using ssierra component lib?
+- generative testing using schema generators
 - controller is cljc to support jvm tests using messages i.e. test everything except render fn
 - cljc all the things
 - composability: re-usable widgets use ::ns/foo to keep state in single atom but hygienically. N of same widgets used concurrently?
@@ -36,6 +38,7 @@ run devcards
 ### Questions that need answers
 
 - how should controller have access to state?
+- will norm/denorm fns work for all query results?
 
 ## License
 
