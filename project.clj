@@ -11,15 +11,16 @@
                  [com.taoensso/timbre "4.1.4"]
 
                  [com.stuartsierra/component "0.3.0"]
-                 [prismatic/schema "0.4.3"]
+                 [prismatic/schema "1.0.4"]
                  [com.rpl/specter "0.6.2"]
 
                  [org.omcljs/om "1.0.0-alpha28"]]
 
   :profiles {:dev {:source-paths  ["dev"
                                    "src/clj"
-                                   "src/cljc"]
+                                   "src/cljc"
+                                   "test/cljc"]
                    :clean-targets ^{:protect false} ["resources/public/js" :target]
-                   :dependencies  [[org.clojure/test.check "0.8.2"]]}}
+                   :dependencies  [[org.clojure/test.check "0.9.0"]]}}
 
   )
