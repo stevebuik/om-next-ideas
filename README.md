@@ -24,10 +24,18 @@ run devcards
 - using ssierra component lib?
 - generative testing using schema generators
 - controller is cljc to support jvm tests using messages i.e. test everything except render fn
-- cljc all the things
+- cljc all the things, even client parser
+    - easier to run CI tests for client code
+    - easier to run integration tests of client and server when server is clj
+- check cljc parser against db->tree in devcards tests
+    - maybe even generative
+- schema to validate queries (especially on server where client might be hacked)
+- remote query generation
+    - use absence of key in tables to include a query node (and sub-queries) in the remote query
 - composability: re-usable widgets use ::ns/foo to keep state in single atom but hygienically. N of same widgets used concurrently?
-- testing patterns
+- abstract components
 - is it possible to parse and generate docs for a parser?
+    - if using a query schema then yes for the query
 - event bus
 - parse middleware
 

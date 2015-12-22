@@ -17,6 +17,7 @@
 
             [om-next-ideas.core :refer :all]))
 
+; schemas used to generate sample databases for round-trip tests
 (s/defschema Car {:car/id                    s/Int
                   (s/optional-key :car/name) s/Str})
 
@@ -25,10 +26,11 @@
                      (s/optional-key :person/cars) [Car]})
 
 (s/defn de-dupe
+  "HOF returning a fn that removes duplicates from a seq in a map using a primary key"
   [seq-key :- s/Keyword
    pk :- s/Keyword]
-  (fn [items]
-    (->> items
+  (s/fn [item-map]
+    (->> item-map
          seq-key
          (group-by pk)
          (mapv (fn [[_ v]] (first v))))))
@@ -41,8 +43,8 @@
                        (s-gen/generator {:people [Person]}))
            prop #(prop/for-all [query-result generator]
                                (let [ident-keys #{:person/id :car/id}]
-                                 (let [{:keys [om.next/tables people]} (db->normalized query-result ident-keys)]
-                                   (= (normalized->db people tables) (:people query-result)))))]
+                                 (let [{:keys [om.next/tables people]} (graph->normalized query-result ident-keys)]
+                                   (= (normalized->graph people tables) (:people query-result)))))]
        ;(pprint (gen/sample generator 3))
        (is (:result (tc/quick-check 50 (prop)))))))
 
@@ -51,8 +53,8 @@
   (s/with-fn-validation
 
     (are [query-result ident-keys]
-      (let [{:keys [om.next/tables people]} (db->normalized query-result ident-keys)
-            round-tripped (normalized->db people tables)]
+      (let [{:keys [om.next/tables people]} (graph->normalized query-result ident-keys)
+            round-tripped (normalized->graph people tables)]
 
         (when (not= round-tripped (:people query-result))
           (pprint {:before (:people query-result)
