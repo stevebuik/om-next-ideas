@@ -15,6 +15,7 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
 
+            [om-next-ideas.parsing-utils :as pu]
             [om-next-ideas.core :refer :all]))
 
 ; schemas used to generate sample databases for round-trip tests
@@ -43,8 +44,8 @@
                        (s-gen/generator {:people [Person]}))
            prop #(prop/for-all [query-result generator]
                                (let [ident-keys #{:person/id :car/id}]
-                                 (let [{:keys [om.next/tables people]} (graph->normalized query-result ident-keys)]
-                                   (= (normalized->graph people tables) (:people query-result)))))]
+                                 (let [{:keys [om.next/tables people]} (pu/graph->normalized query-result ident-keys)]
+                                   (= (pu/normalized->graph people tables) (:people query-result)))))]
        ;(pprint (gen/sample generator 3))
        (is (:result (tc/quick-check 50 (prop)))))))
 
@@ -53,8 +54,8 @@
   (s/with-fn-validation
 
     (are [query-result ident-keys]
-      (let [{:keys [om.next/tables people]} (graph->normalized query-result ident-keys)
-            round-tripped (normalized->graph people tables)]
+      (let [{:keys [om.next/tables people]} (pu/graph->normalized query-result ident-keys)
+            round-tripped (pu/normalized->graph people tables)]
 
         (when (not= round-tripped (:people query-result))
           (pprint {:before (:people query-result)

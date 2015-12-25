@@ -2,8 +2,10 @@
   (:require
     #?(:clj [clojure.pprint :refer [pprint]]
        :cljs [cljs.pprint :refer [pprint]])
-            [om-next-ideas.core :as c :refer [readf mutate OmIdent]]
-            [schema.core :as s]))
+            [schema.core :as s]
+            [om-next-ideas.core :refer [Id]]
+            [om-next-ideas.parsing-utils :as pu :refer [readf mutate]]
+            [taoensso.timbre :as log]))
 
 ; SCHEMAS
 
@@ -20,31 +22,74 @@
 ; READ
 
 (s/defmethod readf :people
-             [{:keys [state query] :as env} :- (c/env-with-query PersonQuery)
+             [{:keys [state query] :as env} :- (pu/env-with-query PersonQuery)
               _ _]
-             {:value (c/parse-join-multiple env query :person (:people @state))})
+             {:value (pu/parse-join-multiple env query :person (:people @state))})
 
 (s/defmethod readf :person
-             [{:keys [state query] :as env} :- (c/env-with-query PersonQuery)
+             [{:keys [state query] :as env} :- (pu/env-with-query PersonQuery)
               _
               params]
-             (let [person (c/get-linked env params :person/id :person)
-                   cars-join (c/get-sub-query env :person/cars)]
+             (let [person (pu/get-linked env params :person/id :person)
+                   cars-join (pu/get-sub-query env :person/cars)]
+               (log/trace "read person" {:person person
+                                         :cj     cars-join})
                {:value (cond-> (select-keys person (filterv keyword? query))
-                               cars-join (c/merge-join-multiple env cars-join :car :person/cars person))}))
+                               cars-join (pu/merge-join-multiple env cars-join :car :person/cars person))}))
+
+(s/defmethod readf :cars
+             [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
+              _
+              params]
+             (let [car-idents (->> @state :om.next/tables :car/id keys (map #(vector :car/id %)))
+                   value (pu/parse-join-multiple env query :car car-idents)]
+               (log/trace "read cars" {:idents car-idents
+                                       :params params})
+               {:value value}))
 
 (s/defmethod readf :car
-             [{:keys [state query] :as env} :- (c/env-with-query CarQuery)
+             [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (let [car (c/get-linked env params :car/id :car)
-                   engine-join (c/get-sub-query env :car/engine)]
+             (let [car (pu/get-linked env params :car/id :car)
+                   engine-join (pu/get-sub-query env :car/engine)]
+               (log/trace "read car" {:car    car
+                                      :ej     engine-join
+                                      :params params})
                {:value (cond-> (select-keys car query)
-                               engine-join (c/merge-join-single env engine-join :engine :car/engine car))}))
+                               engine-join (pu/merge-join-single env engine-join :engine :car/engine car))}))
 
 (s/defmethod readf :engine
-             [{:keys [state query] :as env} :- (c/env-with-query EngineQuery)
+             [{:keys [state query] :as env} :- (pu/env-with-query EngineQuery)
               _
               params]
-             {:value (select-keys (c/get-linked env params :engine/id :engine) query)})
+             {:value (select-keys (pu/get-linked env params :engine/id :engine) query)})
+
+(s/defmethod readf :error
+             [& args]
+             {:value (throw (RuntimeException.))})
+
+; MUTATION
+
+(s/defmethod mutate 'app/error [& args] {:action #(/ 1 0)})
+
+(s/defmethod mutate 'app/add-car
+             [{:keys [state]} _
+              {:keys [car/name car/engine]}]
+             {:action (fn []
+                        (swap! state #(let [[_ car-id] (pu/temp-id :car/id)]
+                                       (-> %
+                                           (assoc-in [:om.next/tables :car/id car-id]
+                                                     {:car/id   car-id
+                                                      :car/name name})))))})
+
+(s/defmethod mutate 'app/save-person
+             [{:keys [state]} _
+              {:keys [person/id person/cars]} :- {:person/id                    Id
+                                                  (s/optional-key :person/cars) [Id]}]
+             {:action (fn []
+                        (swap! state (fn [s]
+                                       (cond-> s
+                                               cars (assoc-in [:om.next/tables :person/id id :person/cars]
+                                                              (mapv #(vector :car/id %) cars))))))})
 
