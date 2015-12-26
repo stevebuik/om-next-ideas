@@ -65,7 +65,10 @@
                                   :car/engine {:engine/torque 540}}]}
                   {:person/id   1001,
                    :person/cars [{:car/name   "Tesla Roadster",
-                                  :car/engine {:engine/torque 270}}]}]}))
+                                  :car/engine {:engine/torque 270}}]}]})
+
+      (is (thrown? RuntimeException (parse {:state db} [:error]))
+          "read exceptions are thrown"))
 
     (testing "write parsing"
 
@@ -94,8 +97,6 @@
                ["Tesla Roadster" "Tesla Model S"])
             "current and new (with tempid) car are returned by the read")
 
-        (is (thrown? RuntimeException (parse {:state db} [:error]))
-            "read exceptions are thrown")
         ; change level to :error to see middleware logging
         (is (log/with-log-level :fatal (parse {:state db} `[(app/error)]))
-            "write exceptions are swallowed (but the middleware can log them)")))))
+            "write exceptions are silently swallowed (but the middleware can log them)")))))
