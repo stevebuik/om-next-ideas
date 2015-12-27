@@ -8,11 +8,11 @@
     [om-next-ideas.datomic :as datomic]))
 
 (s/defn system
-  []
-  (component/system-map
-    :datomic (datomic/new-datomic-db "datomic:mem://localhost:4334/ideas")
-    :parser-api parser/new-api
-    :server (server/new-server)))
+  [extras :- {(s/optional-key :server) s/Any}]
+  (cond-> (component/system-map
+            :datomic (datomic/new-datomic-db "datomic:mem:/ideas")
+            :parser-api (parser/new-api))
+          extras (merge extras)))
 
 (defn start
   "Performs side effects to initialize the system, acquire resources,
@@ -27,5 +27,5 @@
   (component/stop system))
 
 (comment
-  (def system' (system))
+  (def system' (system {:server (server/new-server)}))
   (start system'))

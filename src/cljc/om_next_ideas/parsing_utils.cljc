@@ -53,6 +53,10 @@
                          (assoc m
                            :action #(log/log-and-rethrow-errors (action)))))})
 
+(defmethod readf :default
+  [_ k _]
+  {:value {:error (str "No handler for read key " k)}})
+
 (s/defn parse-join-multiple
   "for a seq of idents, invoke a parse using a supplied read key.
   the invoked read fn will have the ident assoc'd into it's env"

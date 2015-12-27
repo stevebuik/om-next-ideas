@@ -29,13 +29,7 @@
     (transit/write writer d)
     (.toString out)))
 
-(defn generate-response [data & [status]]
-  {:status  (or status 200)
-   :headers {"Content-Type" "application/transit+json"}
-   :body    data})
-
 (defn handler
-  ""
   [parser req]
   (let [match (bidi/match-route routes (:uri req)
                                 :request-method (:request-method req))]
@@ -46,9 +40,11 @@
                  :headers {"Content-Type" "text/html"})
         :api (->> (:body req)
                   transit-inputstream->clj
-                  (api/handle-api-request parser)
+                  (api/parse parser)
                   clj->transit
-                  generate-response)))))
+                  (assoc {:status  200
+                          :headers {"Content-Type" "application/transit+json"}}
+                    :body))))))
 
 ;; =============================================================================
 ;; WebServer
