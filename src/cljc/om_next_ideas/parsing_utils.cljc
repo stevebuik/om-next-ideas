@@ -8,6 +8,7 @@
 
         [schema.core :as s]
         [clojure.walk :as wlk]
+        [om.next.impl.parser :as p]
 
         [om-next-ideas.core :refer [OmIdent]]
         [om.tempid :as tid]
@@ -52,6 +53,10 @@
    :mutate (fn [e k p] (let [{:keys [action] :as m} (mutate e k p)]
                          (assoc m
                            :action #(log/log-and-rethrow-errors (action)))))})
+
+(def wrapped-local-parse (-> {:read readf :mutate mutate}
+                             wrap-throw-exceptions
+                             p/parser))
 
 (defmethod readf :default
   [_ k _]
@@ -140,21 +145,66 @@
                              :keys    (keys (table-key tables))})
     (get (table-key tables) (last ident))))
 
-(s/defn graph->normalized
-  [denormalized
-   id-keys :- #{s/Keyword}]
-  "transform a query result from a remote service into the om.next normalized shape"
+(s/defn tree->links
+  "returns a lookup table of id -> merged record i.e. all fields in all copies of
+  the tree merged into a single record"
+  [id-key :- s/Keyword
+   denormalized]
   (let [tables (atom {})]
-    (merge
-      (wlk/postwalk
-        (fn [n]
-          (if-let [record-pk (and (map? n) (some id-keys (keys n)))]
-            (let [link [record-pk (get n record-pk)]]
-              (swap! tables update-in link merge n)
-              link)
-            n))
-        denormalized)
-      {:om.next/tables @tables})))
+    (wlk/postwalk
+      (fn [n]
+        (when-let [record-pk (and (map? n) (some #{id-key} (keys n)))]
+          (let [link [(get n record-pk)]]
+            (swap! tables update-in link merge n)))
+        n)
+      denormalized)
+    @tables))
+
+(s/defn get-lookup-key
+  "for a map, return the index key to be used or nil if not indexed.
+   the decision is made by looking for a keyword in the map and returning the indents val"
+  [idents :- {s/Keyword s/Keyword}
+   m :- (s/pred map? "is a map")]
+  (some idents (keys m)))
+
+(s/defn tree->normalized
+  "normalize a query result.
+   id-key is the pk for any record being normalized
+   idents is a map where key is a field always present in a record and value is the link key for that record type"
+  [denormed :- (s/pred map? "is a map")
+   id-key :- s/Keyword
+   idents :- {s/Keyword s/Keyword}]
+  (let [links (tree->links id-key denormed)
+        replacer (fn [n]
+                   (if (and (map? n)
+                            (get-lookup-key idents n)
+                            (get n id-key)
+                            (get links (get n id-key)))
+                     [(get-lookup-key idents n) (get n id-key)]
+                     n))
+        tables (->> links
+                    ; return nil for path when no lookup key found
+                    (map (fn [[k v]]
+                           [(when-let [lk (get-lookup-key idents v)]
+                              [lk k])
+                            v]))
+                    ; log and filter if path from prev step is nil
+                    (filter (fn [[path value]]
+                              (if path
+                                [path value]
+                                (do
+                                  (log/info "cannot denorm" value)
+                                  false))))
+                    ; load into a map using the path
+                    (reduce (fn [a [path value]]
+                              (let [value-normed (->> value ; walk map entries but not map
+                                                      (map (partial wlk/postwalk replacer))
+                                                      (into {}))]
+                                (assoc-in a path value-normed)))
+                            {}))]
+    (assoc
+      (wlk/postwalk replacer denormed)
+      :om.next/tables tables)))
 
 (defn is-link?
   [n id-keys]
