@@ -9,14 +9,14 @@
 
 ; SCHEMAS
 
-(s/defschema EngineQuery [(s/enum :engine/id :engine/torque :engine/hp)])
+(s/defschema EngineQuery [(s/enum :db/id :engine/torque :engine/hp)])
 
 (s/defschema CarQuery [(s/either
-                         (s/enum :car/id :car/name)
+                         (s/enum :db/id :car/name)
                          {:car/engine EngineQuery})])
 
 (s/defschema PersonQuery [(s/either
-                            (s/enum :person/id :person/name)
+                            (s/enum :db/id :person/name)
                             {:person/cars CarQuery})])
 
 ; READ
@@ -30,7 +30,7 @@
              [{:keys [state query] :as env} :- (pu/env-with-query PersonQuery)
               _
               params]
-             (let [person (pu/get-linked env params :person/id :person)
+             (let [person (pu/get-linked env params :person/by-id :person)
                    cars-join (pu/get-sub-query env :person/cars)]
                (log/trace "read person" {:person person
                                          :cj     cars-join})
@@ -41,7 +41,7 @@
              [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (let [car-idents (->> @state :om.next/tables :car/id keys (map #(vector :car/id %)))
+             (let [car-idents (->> @state :om.next/tables :car/by-id keys (map #(vector :car/id %)))
                    value (pu/parse-join-multiple env query :car car-idents)]
                (log/trace "read cars" {:idents car-idents
                                        :params params})
@@ -51,7 +51,7 @@
              [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (let [car (pu/get-linked env params :car/id :car)
+             (let [car (pu/get-linked env params :car/by-id :car)
                    engine-join (pu/get-sub-query env :car/engine)]
                (log/trace "read car" {:car    car
                                       :ej     engine-join
@@ -63,7 +63,7 @@
              [{:keys [state query] :as env} :- (pu/env-with-query EngineQuery)
               _
               params]
-             {:value (select-keys (pu/get-linked env params :engine/id :engine) query)})
+             {:value (select-keys (pu/get-linked env params :engine/by-id :engine) query)})
 
 (s/defmethod readf :error
              [& args]
@@ -77,19 +77,19 @@
              [{:keys [state]} _
               {:keys [car/name car/engine]}]
              {:action (fn []
-                        (swap! state #(let [[_ car-id] (pu/temp-id :car/id)]
+                        (swap! state #(let [[_ car-id] (pu/temp-id :car/by-id)]
                                        (-> %
-                                           (assoc-in [:om.next/tables :car/id car-id]
-                                                     {:car/id   car-id
+                                           (assoc-in [:om.next/tables :car/by-id car-id]
+                                                     {:db/id    car-id
                                                       :car/name name})))))})
 
 (s/defmethod mutate 'app/save-person
              [{:keys [state]} _
-              {:keys [person/id person/cars]} :- {:person/id                    Id
-                                                  (s/optional-key :person/cars) [Id]}]
+              {:keys [db/id person/cars]} :- {:db/id                        Id
+                                              (s/optional-key :person/cars) [Id]}]
              {:action (fn []
                         (swap! state (fn [s]
                                        (cond-> s
-                                               cars (assoc-in [:om.next/tables :person/id id :person/cars]
-                                                              (mapv #(vector :car/id %) cars))))))})
+                                               cars (assoc-in [:om.next/tables :person/by-id id :person/cars]
+                                                              (mapv #(vector :car/by-id %) cars))))))})
 

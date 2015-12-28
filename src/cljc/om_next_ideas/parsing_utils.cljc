@@ -135,7 +135,7 @@
    table-key :- s/Keyword
    read-key :- s/Keyword]
   (let [env-key (keyword (str (name read-key) "-id"))       ; read from env
-        params-key (keyword (name read-key) "id")           ; or read from params
+        params-key :db/id                                   ; or read from params
         ident (s/validate OmIdent (or (get env env-key)     ; env has preference
                                       (get params params-key)))
         {:keys [om.next/tables]} @state]
