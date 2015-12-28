@@ -43,7 +43,8 @@
     (tid/tempid (:id n))
     n))
 
-(s/defschema is-fn s/Any)                                   ; TODO find a way to validate defmulti
+; TODO find a way to validate defmulti
+(s/defschema is-fn s/Any)
 (s/defschema ParserConfig {:read is-fn :mutate is-fn})
 
 (s/defn wrap-throw-exceptions :- ParserConfig
@@ -57,10 +58,6 @@
 (def wrapped-local-parse (-> {:read readf :mutate mutate}
                              wrap-throw-exceptions
                              p/parser))
-
-(defmethod readf :default
-  [_ k _]
-  {:value {:error (str "No handler for read key " k)}})
 
 (s/defn parse-join-multiple
   "for a seq of idents, invoke a parse using a supplied read key.

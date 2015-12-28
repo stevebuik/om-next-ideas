@@ -13,7 +13,7 @@
      (:import [om.tempid TempId]
               [java.util UUID])))
 
-; schema
+; schema. duplicated in remote-core for server
 
 (defn is-uuid? [d] (instance? UUID d))
 
@@ -23,4 +23,13 @@
 (s/defschema OmIdent [(s/one s/Keyword "ident key")
                       (s/one Id "ident id")])
 
+; reconciler fns
 
+(s/defn merge-result-tree
+  [current-state normalized-response]
+  "deep merge maps from b into map a, or replace any other data type"
+  (letfn [(merge-tree [a b]
+            (if (and (map? a) (map? b))
+              (merge-with #(merge-tree %1 %2) a b)
+              b))]
+    (merge-tree current-state normalized-response)))

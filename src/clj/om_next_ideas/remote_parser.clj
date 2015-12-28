@@ -1,8 +1,7 @@
 (ns om-next-ideas.remote-parser
   (:require
     [clojure.pprint :refer [pprint]]
-    [clojure.set :as set]
-    [om-next-ideas.parsing-utils :as pu]
+    [om-next-ideas.remote-core :refer [readf mutate OmIdent]]
     [om.next.server :as om]
     [com.stuartsierra.component :as component]
     [schema.core :as s]
@@ -11,7 +10,7 @@
 
 ; read fns
 
-(s/defmethod pu/readf :people
+(s/defmethod readf :people
              [{:keys [db query]} _ params]
              (let [q '[:find [(pull ?p selector) ...]
                        :in $ selector
@@ -29,15 +28,20 @@
                           :connection s/Any
                           s/Keyword   s/Any})
 
-(s/defmethod ^:always-validate pu/mutate 'app/add-person
+(s/defmethod ^:always-validate mutate 'app/add-person
              [{:keys [db connection]} :- MutationEnv
               _
-              params :- {:person/name s/Str}]
+              params :- {:temp-id     OmIdent
+                         :person/name s/Str}]
              {:action (fn []
-                        (let [p (assoc
+                        (let [db-temp-id (d/tempid :db.part/user)
+                              p (assoc
                                   (select-keys params [:person/name])
-                                  :db/id (d/tempid :db.part/user))]
-                          (:tempids @(d/transact connection [p]))))})
+                                  :db/id db-temp-id)
+                              {:keys [db-after tempids]} @(d/transact connection [p])]
+                          (let [{:keys [temp-id]} params]
+                            {:tempids {temp-id
+                                       [(first temp-id) (d/resolve-tempid db-after tempids db-temp-id)]}})))})
 
 ; Component and API Protocol
 
@@ -62,5 +66,5 @@
 (defn new-api []
   (component/using
     ; TODO use a wrapper here to log exceptions and return an error result to client without the stack trace
-    (->ParserImpl (om/parser {:read pu/readf :mutate pu/mutate}))
+    (->ParserImpl (om/parser {:read readf :mutate mutate}))
     [:datomic]))

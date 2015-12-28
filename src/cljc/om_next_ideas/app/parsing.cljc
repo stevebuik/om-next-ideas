@@ -22,9 +22,15 @@
 ; READ
 
 (s/defmethod readf :people
-             [{:keys [state query] :as env} :- (pu/env-with-query PersonQuery)
+             [{:keys [state query target ast] :as env} :- (pu/env-with-query PersonQuery)
               _ _]
-             {:value (pu/parse-join-multiple env query :person (:people @state))})
+             (let [people-absent? (nil? (:people @state))]
+               (cond-> {:value (pu/parse-join-multiple env query :person (:people @state))}
+                       ; assoc "true" or "ast" here to tell reconciler to send to remote
+                       ; true if no changes to query or
+                       ; ast if you want to transform the query in some way
+                       (and (= :remote target)
+                            people-absent?) (assoc :remote ast))))
 
 (s/defmethod readf :person
              [{:keys [state query] :as env} :- (pu/env-with-query PersonQuery)
@@ -82,6 +88,16 @@
                                            (assoc-in [:om.next/tables :car/by-id car-id]
                                                      {:db/id    car-id
                                                       :car/name name})))))})
+(s/defmethod mutate 'app/add-person
+             [{:keys [state target ast]} _
+              person :- {:person/name s/Str}]
+             (let [temp-id (pu/temp-id :person/by-id)]
+               {:action (fn []
+                          (swap! state #(-> %
+                                            (assoc-in (concat [:om.next/tables] temp-id) (assoc person :db/id (last temp-id)))
+                                            (update-in [:people] conj temp-id))))
+                :remote (update-in ast [:params]
+                                   #(assoc % :temp-id temp-id))}))
 
 (s/defmethod mutate 'app/save-person
              [{:keys [state]} _
