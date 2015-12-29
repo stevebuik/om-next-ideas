@@ -11,13 +11,13 @@
 
 (s/defschema EngineQuery [(s/enum :db/id :engine/torque :engine/hp)])
 
-(s/defschema CarQuery [(s/either
-                         (s/enum :db/id :car/name)
-                         {:car/engine EngineQuery})])
+(s/defschema CarQuery [(s/conditional
+                         keyword? (s/enum :db/id :car/name)
+                         map? {:car/engine EngineQuery})])
 
-(s/defschema PersonQuery [(s/either
-                            (s/enum :db/id :person/name)
-                            {:person/cars CarQuery})])
+(s/defschema PersonQuery [(s/conditional
+                            keyword? (s/enum :db/id :person/name)
+                            map? {:person/cars CarQuery})])
 
 ; READ
 
@@ -73,7 +73,8 @@
 
 (s/defmethod readf :error
              [& args]
-             {:value (throw (RuntimeException.))})
+             {:value (throw #?(:clj  (RuntimeException.)
+                               :cljs (js/Error.)))})
 
 ; MUTATION
 
@@ -89,23 +90,30 @@
                                                      {:db/id    car-id
                                                       :car/name name})))))})
 (s/defmethod mutate 'app/add-person
-             [{:keys [state target ast]} _
+             [{:keys [state]} _
               person :- {:person/name s/Str}]
              (let [temp-id (pu/temp-id :person/by-id)]
                {:action (fn []
                           (swap! state #(-> %
                                             (assoc-in (concat [:om.next/tables] temp-id) (assoc person :db/id (last temp-id)))
-                                            (update-in [:people] conj temp-id))))
-                :remote (update-in ast [:params]
-                                   #(assoc % :temp-id temp-id))}))
+                                            (update-in [:people] conj temp-id))))}))
 
 (s/defmethod mutate 'app/save-person
              [{:keys [state]} _
-              {:keys [db/id person/cars]} :- {:db/id                        Id
-                                              (s/optional-key :person/cars) [Id]}]
+              {:keys [db/id person/cars person/name]} :- {:db/id                        Id
+                                                          (s/optional-key :person/name) s/Str
+                                                          (s/optional-key :person/cars) [Id]}]
              {:action (fn []
                         (swap! state (fn [s]
                                        (cond-> s
+                                               name (assoc-in [:om.next/tables :person/by-id id :person/name]
+                                                              name)
                                                cars (assoc-in [:om.next/tables :person/by-id id :person/cars]
                                                               (mapv #(vector :car/by-id %) cars))))))})
+
+(s/defmethod mutate 'app/sync-person
+             [{:keys [state ast]} _
+              {:keys [db/id]} :- {:db/id Id}]
+             ()
+             {:remote (assoc-in ast [:params :temp-id] id)})
 

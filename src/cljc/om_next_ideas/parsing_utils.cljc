@@ -52,8 +52,10 @@
   [{:keys [read mutate]} :- ParserConfig]
   {:read   (fn [e k p] (read e k p))
    :mutate (fn [e k p] (let [{:keys [action] :as m} (mutate e k p)]
-                         (assoc m
-                           :action #(log/log-and-rethrow-errors (action)))))})
+                         (if action
+                           (assoc m
+                             :action #(log/log-and-rethrow-errors (action)))
+                           m)))})
 
 (def wrapped-local-parse (-> {:read readf :mutate mutate}
                              wrap-throw-exceptions

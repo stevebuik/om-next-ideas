@@ -69,27 +69,44 @@
                [])
             "remote read after remote response returns nothing to send")
 
-        ; user emits a message from the ui which is processed locally by the reconciler
-        (let [msg-from-ui {:type        :app/add-person
-                           :person/name "Clark Kent"}]
+        ; user adds a new person with empty name
+        (let [msg-from-ui {:type :app/add-person
+                           :name ""}]
+
           (mutate-local! msg-from-ui nil)
 
-          ; reconciler re-runs queries and will re-render the dependant view components immediately
-          (is (= (read-local [{:people [:person/name]}] nil)
-                 {:people [{:person/name "Clark Kent"}]})
-              "local read returns new person i.e. optimistic update")
-
           ; reconciler runs :remote mutation to see if a remote call is required
-          (let [remote-mutation (mutate-local! msg-from-ui :remote)]
+          (is (= (mutate-local! msg-from-ui :remote) []) "add person is not sent to server")
 
-            #_(is (= remote-mutation '[(app/add-person {:person/name "Clark Kent"})])
-                  "add person is always sent to server")
+          (let [new-person (read-local [{:people [:db/id :person/name]}] nil)
+                new-person-id (-> new-person :people first :db/id)]
+            ; reconciler re-runs queries and will re-render the dependant view components immediately
+            (is (= (-> new-person :people first :person/name) "")
+                "local read returns new person i.e. optimistic update")
 
-            (pprint remote-mutation)
+            (mutate-local! {:type :app/edit-person
+                            :id   [:person/by-id (pu/ensure-tempid new-person-id)]
+                            :name "Clark Kent"} nil)
 
-            (pprint (mutate-remote! remote-mutation))
+            ; reconciler refreshes dependant views
+            (is (= (read-local [{:people [:person/name]}] nil) {:people [{:person/name "Clark Kent"}]})
+                "local write is seen by re-render")
 
-            (pprint @local-state)))
+            (is (= [] (mutate-local! {:type :app/edit-person
+                                      :id   [:person/by-id (pu/ensure-tempid new-person-id)]
+                                      :name "Clark Kent"} :remote))
+                "person edits are not sent to remote")
+
+            (is (= {} (mutate-local! {:type :app/edit-complete
+                                      :id   [:person/by-id (pu/ensure-tempid new-person-id)]} nil))
+                "no local change when user blurs a person")
+
+            (pprint (mutate-local! {:type :app/edit-complete
+                                    :id   [:person/by-id (pu/ensure-tempid new-person-id)]} :remote))
+
+            ;(pprint @local-state)
+
+            ))
 
 
         ; local: add-person mutation success

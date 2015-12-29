@@ -7,6 +7,7 @@
             [om.next.impl.parser :as p]
             [schema.core :as s]
 
+            [om-next-ideas.app.mutation-controller :as controller]
             [om-next-ideas.core :refer [Id]]
             [om-next-ideas.parsing-utils :as pu]
             [om-next-ideas.app.parsing]))
@@ -34,18 +35,15 @@
                                                                       :engine/hp     248}}]}]}
             db (atom (pu/tree->normalized result-from-server :db/id {:person/name   :person/by-id
                                                                      :car/name      :car/by-id
-                                                                     :engine/torque :engine/by-id}))]
-
-        #_(log/with-log-level
-            :debug
-            (pprint
-              (parse {:state db} [{:people [:db/id :person/name
-                                            {:person/cars [:db/id :car/name
-                                                           {:car/engine [:db/id :engine/torque :engine/hp]}]}]}])))
+                                                                     :engine/torque :engine/by-id}))
+            parse-local (fn [q] (parse {:state db} q nil))
+            user-action! (fn [msg] (-> msg
+                                       controller/message->mutation
+                                       parse-local))]
 
         (testing "read parsing"
           (are [query expected-result]
-            (let [parse-result (parse {:state db} query)]
+            (let [parse-result (parse-local query)]
               (= parse-result expected-result))
 
             ; parameterized join
@@ -83,12 +81,12 @@
 
         (testing "write parsing"
 
-          (parse {:state db} `[(app/add-car {:car/name   "Tesla Model S"
-                                             :car/engine {:engine/torque 440
-                                                          :engine/hp     362}})])
+          (parse-local `[(app/add-car {:car/name   "Tesla Model S"
+                                       :car/engine {:engine/torque 440
+                                                    :engine/hp     362}})])
 
           (let [new-car-id (->> [{:cars [:db/id :car/name]}]
-                                (parse {:state db})
+                                parse-local
                                 :cars (filter #(= "Tesla Model S" (:car/name %))) first :db/id)
                 fixed-car-id (pu/ensure-tempid new-car-id)]
 
@@ -96,21 +94,39 @@
             ; leaving this assertion in place so it will fail when the bug is fixed and ensure-tempid is no longer required
             (is (not (instance? om.tempid.TempId new-car-id)) "bug that converts tempids in read parses still exists")
 
-            ; try this with new-car-id to see the tempid bug
-            (parse {:state db} `[(app/save-person {:db/id       1001
-                                                   :person/cars [2001 ~fixed-car-id]})])
+            ; user adds a new person locally
+            (user-action! {:type :app/add-person :name ""})
+
+            (let [new-person-id (->> [{:people [:db/id :person/name]}]
+                                     parse-local
+                                     :people (filter #(= "" (:person/name %)))
+                                     first :db/id pu/ensure-tempid)]
+
+              ; user changes the new person i.e. is editing the name
+              (user-action! {:type :app/edit-person
+                             :id   [:person/by-id new-person-id]
+                             :name "Clark Kent"})
+
+              ; user finishes local editing
+              (user-action! {:type :app/edit-complete
+                             :id   [:person/by-id new-person-id]}))
+
+            ; user adds a car to the new person, try this with new-car-id to see the tempid bug
+            (user-action! {:type :app/edit-person
+                           :id   [:person/by-id 1001]
+                           :cars [[:car/by-id 2001] [:car/by-id fixed-car-id]]})
 
             ; optimistic update will re-read the cars list so ensure that the new car is seen by the query
             (is (= (->> `[({:person [:person/name {:person/cars [:db/id :car/name]}]}
                             {:db/id [:person/by-id 1001]})]
-                        (parse {:state db})
+                        parse-local
                         :person :person/cars
                         (map :car/name))
                    ["Tesla Roadster" "Tesla Model S"])
                 "current and new (with tempid) car are returned by the read")
 
             ; change level to :error to see middleware logging
-            (is (log/with-log-level :fatal (parse {:state db} `[(app/error)]))
-                "write exceptions are silently swallowed (but the middleware can log them)")))))))
+            (is (log/with-log-level :fatal (parse-local `[(app/error)]))
+                "mutation exceptions are silently swallowed (but the middleware can log them)")))))))
 
 (run-tests)
