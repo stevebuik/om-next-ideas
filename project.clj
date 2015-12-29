@@ -1,6 +1,6 @@
 (defproject om-next-ideas "0.1.0-SNAPSHOT"
   :dependencies [[org.clojure/clojure "1.7.0"]
-                 [org.clojure/core.async "0.2.374"]
+                 [org.clojure/core.async "0.2.374" :exclusions [org.clojure/tools.reader]]
 
                  ;; Logging
                  [org.clojure/tools.logging "0.3.1"]
@@ -17,13 +17,20 @@
 
                  [com.datomic/datomic-free "0.9.5344" :exclusions [javax.mail/mail org.apache.httpcomponents/httpclient commons-logging]]
 
-                 [org.omcljs/om "1.0.0-alpha28" :exclusions [commons-codec]]]
+                 [org.clojure/clojurescript "1.7.170"]
+                 [org.omcljs/om "1.0.0-alpha28" :exclusions [commons-codec]]
+                 [cljsjs/react "0.14.3-0"]
+                 [sablono "0.3.6" :exclusions [cljsjs/react]]]
 
   :profiles {:dev {:source-paths  ["dev"
                                    "src/clj"
+                                   "src/cljs"
                                    "src/cljc"
                                    "test/cljc"
                                    "test/clj"]
                    :plugins       [[quickie "0.4.1"]]
                    :clean-targets ^{:protect false} ["resources/public/js" :target]
-                   :dependencies  [[org.clojure/test.check "0.9.0"]]}})
+                   :dependencies  [[figwheel-sidecar "0.5.0-1" :scope "provided"
+                                    :exclusions [commons-codec ring/ring-core org.codehaus.plexus/plexus-utils org.clojure/tools.reader org.clojure/clojurescript]]
+
+                                   [org.clojure/test.check "0.9.0"]]}})

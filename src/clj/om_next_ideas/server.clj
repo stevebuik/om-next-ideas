@@ -2,7 +2,8 @@
   (:require
     [clojure.pprint :refer [pprint]]
     [taoensso.timbre :as log]
-    [ring.util.response :refer [response file-response resource-response]]
+    [ring.middleware.resource :refer [wrap-resource]]
+    [ring.util.response :refer [resource-response]]
     [ring.adapter.jetty :refer [run-jetty]]
     [bidi.bidi :as bidi]
     [cognitect.transit :as transit]
@@ -46,14 +47,25 @@
                           :headers {"Content-Type" "application/transit+json"}}
                     :body))))))
 
+(defrecord Routes []
+  component/Lifecycle
+  (start [{:keys [parser-api] :as component}]
+    (let [req-handler (-> (partial handler parser-api)
+                          (wrap-resource "public"))]
+      (assoc component :handler req-handler)))
+  (stop [component]
+    (dissoc component :handler)))
+
+(defn new-routes []
+  (component/using (->Routes) [:parser-api]))
+
 ;; =============================================================================
 ;; WebServer
 
 (defrecord WebServer [port handler]
   component/Lifecycle
-  (start [{:keys [parser-api] :as component}]
-    (let [req-handler (partial handler parser-api)
-          container (run-jetty req-handler
+  (start [{:keys [routes] :as component}]
+    (let [container (run-jetty (:handler routes)
                                {:port port :join? false})]
       (assoc component :container container)))
   (stop [{:keys [container] :as component}]
@@ -61,5 +73,5 @@
     (dissoc component :container)))
 
 (defn new-server []
-  (component/using (->WebServer 8080 handler) [:parser-api]))
+  (component/using (->WebServer 8080 handler) [:routes]))
 

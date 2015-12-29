@@ -27,7 +27,8 @@
   (log/log-and-rethrow-errors
     (s/with-fn-validation
 
-      (let [{:keys [parser-api] :as sys} (component/start (system/system {})) ; start the remote server
+      ; start the remote api without a web server
+      (let [{:keys [parser-api] :as sys} (component/start (system/system "datomic:mem:/test" {}))
             local-state (atom {})                           ; init the client state db
             ; define read and mutation fns for client and server
             read-local (partial pu/wrapped-local-parse {:state local-state})

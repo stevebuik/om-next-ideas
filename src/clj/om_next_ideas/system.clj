@@ -4,14 +4,18 @@
     [schema.core :as s]
     [com.stuartsierra.component :as component]
     [om-next-ideas.server :as server]
+    [om-next-ideas.figwheel-component :as fw]
     [om-next-ideas.remote-parser :as parser]
     [om-next-ideas.datomic :as datomic]))
 
-(s/defn system
-  [extras :- {(s/optional-key :server) s/Any}]
+(s/defn ^:always-validate system
+  [db-uri :- s/Str
+   extras :- {(s/optional-key :server)   (s/protocol component/Lifecycle)
+              (s/optional-key :figwheel) (s/protocol component/Lifecycle)}]
   (cond-> (component/system-map
-            :datomic (datomic/new-datomic-db "datomic:mem:/ideas")
-            :parser-api (parser/new-api))
+            :datomic (datomic/new-datomic-db db-uri)
+            :parser-api (parser/new-api)
+            :routes (server/new-routes))
           extras (merge extras)))
 
 (defn start
@@ -26,6 +30,14 @@
   [system]
   (component/stop system))
 
+(def local-app-db "datomic:mem:/ideas")
+
 (comment
-  (def system' (system {:server (server/new-server)}))
+  ; start normal server on 8080
+  (def system' (system local-app-db {:server (server/new-server)}))
+
+  ; or figwheel on 3449
+  (def system' (system local-app-db {:figwheel (fw/figwheel)}))
+
+  ; then
   (start system'))
