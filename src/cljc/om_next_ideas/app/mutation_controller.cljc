@@ -1,6 +1,7 @@
 (ns om-next-ideas.app.mutation-controller
   (:require
     [schema.core :as s]
+    [om-next-ideas.parsing-utils :as pu]
     [om-next-ideas.core :refer [OmIdent]]))
 
 ; the mutation message translation layer for the client/app parser
@@ -19,14 +20,15 @@
     (type= :app/edit-complete) {:type (s/eq :app/edit-complete)
                                 :id   OmIdent}))
 
-(s/defn message->mutation
+(s/defn ^:always-validate message->mutation
   [msg :- Message]
   (case (:type msg)
 
     :app/add-person (let [{:keys [name]} msg
-                          params {:person/name name}]
+                          params {:temp-id     (pu/temp-id :person/by-id)
+                                  :person/name name}]
                       `[(app/add-person ~params)
-                        #_{:people [:db/id :person/name]}])
+                        ])
 
     :app/edit-person (let [{:keys [id name cars]} msg
                            params (cond-> {:db/id (last id)}
@@ -36,7 +38,7 @@
                          #_{:people [:db/id :person/name]}])
 
     :app/edit-complete (let [{:keys [id]} msg
-                             params {:db/id (last id)}]
+                             params {:ident id}]
                          `[(app/sync-person ~params)])
 
     ))

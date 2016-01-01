@@ -3,7 +3,7 @@
     #?(:clj [clojure.pprint :refer [pprint]]
        :cljs [cljs.pprint :refer [pprint]])
             [schema.core :as s]
-            [om-next-ideas.core :refer [Id]]
+            [om-next-ideas.core :refer [Id OmIdent]]
             [om-next-ideas.parsing-utils :as pu :refer [readf mutate]]
             [taoensso.timbre :as log]))
 
@@ -26,11 +26,7 @@
               _ _]
              (let [people-absent? (nil? (:people @state))]
                (cond-> {:value (pu/parse-join-multiple env query :person (:people @state))}
-                       ; assoc "true" or "ast" here to tell reconciler to send to remote
-                       ; true if no changes to query or
-                       ; ast if you want to transform the query in some way
-                       (and (= :remote target)
-                            people-absent?) (assoc :remote ast))))
+                       (and (= :remote target) people-absent?) (assoc :remote ast))))
 
 (s/defmethod readf :person
              [{:keys [state query] :as env} :- (pu/env-with-query PersonQuery)
@@ -91,12 +87,13 @@
                                                       :car/name name})))))})
 (s/defmethod mutate 'app/add-person
              [{:keys [state]} _
-              person :- {:person/name s/Str}]
-             (let [temp-id (pu/temp-id :person/by-id)]
-               {:action (fn []
-                          (swap! state #(-> %
-                                            (assoc-in (concat [:om.next/tables] temp-id) (assoc person :db/id (last temp-id)))
-                                            (update-in [:people] conj temp-id))))}))
+              {:keys [temp-id person/name]} :- {:temp-id     OmIdent
+                                                :person/name s/Str}]
+             {:action (fn []
+                        (swap! state #(-> %
+                                          (assoc-in (concat [:om.next/tables] temp-id) {:db/id       (last temp-id)
+                                                                                        :person/name name})
+                                          (update-in [:people] conj temp-id))))})
 
 (s/defmethod mutate 'app/save-person
              [{:keys [state]} _
@@ -112,8 +109,12 @@
                                                               (mapv #(vector :car/by-id %) cars))))))})
 
 (s/defmethod mutate 'app/sync-person
-             [{:keys [state ast]} _
-              {:keys [db/id]} :- {:db/id Id}]
-             ()
-             {:remote (assoc-in ast [:params :temp-id] id)})
+             [{:keys [state ast target]} _
+              {:keys [ident]} :- {:ident OmIdent}]
+             (when (= :remote target)
+               ; hydrate the local copy of the person and send it to the remote
+               (let [person (-> ident (pu/normalized->tree (:om.next/tables @state)))]
+                 {:remote (-> ast
+                              (update-in [:params] dissoc :ident)
+                              (update-in [:params] merge person))})))
 

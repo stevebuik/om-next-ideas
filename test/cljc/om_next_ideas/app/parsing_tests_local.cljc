@@ -90,8 +90,7 @@
                                 :cars (filter #(= "Tesla Model S" (:car/name %))) first :db/id)
                 fixed-car-id (pu/ensure-tempid new-car-id)]
 
-
-            ; leaving this assertion in place so it will fail when the bug is fixed and ensure-tempid is no longer required
+            ; leaving this assertion in place so it will fail when the bug is fixed and pu/ensure-tempid can be removed
             (is (not (instance? om.tempid.TempId new-car-id)) "bug that converts tempids in read parses still exists")
 
             ; user adds a new person locally

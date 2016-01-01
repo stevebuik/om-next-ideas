@@ -39,9 +39,10 @@
                             (->> msg
                                  controller/message->mutation
                                  ((partial parse-local target))))
+            ; TODO use server wrapper for remote mutation (and read)
             mutate-remote! (partial remote-parser/parse parser-api)
             ; init the root query TODO derive this from portable view components
-            root-query [{:people [:db/id]}]]
+            root-query [{:people [:db/id :person/name]}]]
 
         ; reconciler reads local state to perform first render
         (is (= (read-local root-query nil)
@@ -79,53 +80,68 @@
           (is (= (mutate-local! msg-from-ui :remote) []) "add person is not sent to server")
 
           (let [new-person (read-local [{:people [:db/id :person/name]}] nil)
-                new-person-id (-> new-person :people first :db/id)]
+                new-person-id (-> new-person :people first :db/id)
+                new-person-ident [:person/by-id (pu/ensure-tempid new-person-id)]]
             ; reconciler re-runs queries and will re-render the dependant view components immediately
             (is (= (-> new-person :people first :person/name) "")
                 "local read returns new person i.e. optimistic update")
 
             (mutate-local! {:type :app/edit-person
-                            :id   [:person/by-id (pu/ensure-tempid new-person-id)]
+                            :id   new-person-ident
                             :name "Clark Kent"} nil)
 
             ; reconciler refreshes dependant views
-            (is (= (read-local [{:people [:person/name]}] nil) {:people [{:person/name "Clark Kent"}]})
+            (is (= (read-local [{:people [:person/name]}] nil)
+                   {:people [{:person/name "Clark Kent"}]})
                 "local write is seen by re-render")
 
             (is (= [] (mutate-local! {:type :app/edit-person
-                                      :id   [:person/by-id (pu/ensure-tempid new-person-id)]
+                                      :id   new-person-ident
                                       :name "Clark Kent"} :remote))
                 "person edits are not sent to remote")
 
+            ; reconciler runs local mutation
             (is (= {} (mutate-local! {:type :app/edit-complete
-                                      :id   [:person/by-id (pu/ensure-tempid new-person-id)]} nil))
+                                      :id   new-person-ident} nil))
                 "no local change when user blurs a person")
 
-            (pprint (mutate-local! {:type :app/edit-complete
-                                    :id   [:person/by-id (pu/ensure-tempid new-person-id)]} :remote))
+            ; reconciler runs :remote to see if a remote send is required
+            (let [remote-mutation (mutate-local! {:type :app/edit-complete
+                                                  :id   new-person-ident} :remote)]
+              (is (= remote-mutation `[(app/sync-person
+                                         {:db/id       ~new-person-id
+                                          :person/name "Clark Kent"})])
+                  "the full local copy of the new person will be sent to the remote")
 
-            ;(pprint @local-state)
+              (let [sync-response (mutate-remote! remote-mutation)
+                    {:keys [tempids]} (get-in sync-response ['app/sync-person :result])
+                    tempids-fixed (->> tempids
+                                       (map (fn [[k v]] [(pu/ensure-tempid k) v]))
+                                       (into {}))]
 
-            ))
+                ; migrate tempids from response
+                (swap! local-state #(pu/tempid-migrate % nil tempids-fixed nil))
 
+                ; reconciler re-reads after the remote response
+                (is (= (read-local root-query)
+                       {:people [{:db/id       (get tempids new-person-id)
+                                  :person/name "Clark Kent"}]})
+                    "queries return the updated id after migrate")))
 
-        ; local: add-person mutation success
-        ; local: mutation query(s) returns example (optimistic insert)
-        ; local: mutation returns same for :remote
-        ; remote: mutation success returns success + query(s) + tempids
+            (let [person1-db-ident (->> (read-local root-query)
+                                        :people first :db/id
+                                        (vector :person/by-id))]
+              ; user changes the person using the db/id
+              (mutate-local! {:type :app/edit-person
+                              :id   person1-db-ident
+                              :name "Clarks Kent"} nil)
 
-        ; local: mutation results merged
-        ; local: mutation query(s) returns example (server refresh)
+              ; user completes edit of person and reconciler sends to remote
+              (let [remote-update (mutate-local! {:type :app/edit-complete
+                                                  :id   person1-db-ident} :remote)]
+                (mutate-remote! remote-update))
 
-        #_#_#_(mutate-remote! {:type        :app/add-person
-                               :person/name "Clark Kent"})
-            (mutate-remote! {:type        :app/add-person
-                             :person/name "Bruce Wayne"})
-
-            (is (= (read-remote [{:people [:person/name]}])
-                   {:people [{:person/name "Clark Kent"}
-                             {:person/name "Bruce Wayne"}]})
-                "Both records returned by remote after mutation")
-
-        ))))
-
+              ; checking that remote parser updates and doesn't insert
+              (is (= (read-remote [{:people [:person/name]}])
+                     {:people [{:person/name "Clarks Kent"}]})
+                  "remote write updates existing person"))))))))

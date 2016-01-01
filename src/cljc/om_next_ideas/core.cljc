@@ -17,8 +17,13 @@
 
 (defn is-uuid? [d] (instance? UUID d))
 
-(s/defschema Id (s/conditional map? {:id (s/pred is-uuid? "is a temp id")}
-                               :else s/Num))
+; TODO can this be done using s/pred without portable instead?
+(s/defschema Id #?(:clj  (s/conditional
+                           map? {:id (s/pred is-uuid? "is a temp id")}
+                           :else s/Num)
+                   :cljs (s/conditional
+                           #(instance? tid/TempId %) s/Any
+                           :else s/Num)))
 
 (s/defschema OmIdent [(s/one s/Keyword "ident key")
                       (s/one Id "ident id")])
@@ -26,8 +31,8 @@
 ; reconciler fns
 
 (s/defn merge-result-tree
-  [current-state normalized-response]
   "deep merge maps from b into map a, or replace any other data type"
+  [current-state normalized-response]
   (letfn [(merge-tree [a b]
             (if (and (map? a) (map? b))
               (merge-with #(merge-tree %1 %2) a b)

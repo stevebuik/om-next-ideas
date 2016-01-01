@@ -6,7 +6,8 @@
     [ring.util.response :refer [resource-response]]
     [ring.adapter.jetty :refer [run-jetty]]
     [bidi.bidi :as bidi]
-    [cognitect.transit :as transit]
+    [cognitect.transit :as t]
+    [om.transit :as ot]
     [com.stuartsierra.component :as component]
     [om-next-ideas.remote-parser :as api]
     [schema.core :as s])
@@ -20,14 +21,14 @@
 
 (s/defn transit-inputstream->clj
   [in :- (s/pred #(instance? InputStream %))]
-  (let [reader (transit/reader in :json)]
-    (transit/read reader)))
+  (let [reader (ot/reader in)]
+    (t/read reader)))
 
 (s/defn clj->transit :- s/Str
   [d]
   (let [out (ByteArrayOutputStream. 4096)
-        writer (transit/writer out :json)]
-    (transit/write writer d)
+        writer (ot/writer out)]
+    (t/write writer d)
     (.toString out)))
 
 (defn handler

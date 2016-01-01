@@ -1,12 +1,13 @@
 (ns om-next-ideas.remote-parser
   (:require
     [clojure.pprint :refer [pprint]]
-    [om-next-ideas.remote-core :refer [readf mutate OmIdent]]
+    [om-next-ideas.remote-core :refer [readf mutate Id OmIdent]]
     [om.next.server :as om]
     [com.stuartsierra.component :as component]
     [schema.core :as s]
     [datomic.api :as d]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import (om.tempid TempId)))
 
 ; read fns
 
@@ -28,20 +29,29 @@
                           :connection s/Any
                           s/Keyword   s/Any})
 
-(s/defmethod ^:always-validate mutate 'app/add-person
+(s/defmethod ^:always-validate mutate 'app/sync-person
              [{:keys [db connection]} :- MutationEnv
               _
-              params :- {:temp-id     OmIdent
-                         :person/name s/Str}]
+              ; TODO NEXT change :db/id to be OmIdent and remove temp-id
+              ; since that can be derived from the type of :db/id
+              ; and :tempids can be conditionally returned based on that
+              ; i.e. sync-person can become sync-anything with schema to
+              ; control what can be sent
+              {:keys [db/id] :as params} :- {:db/id       Id
+                                             :person/name s/Str}]
              {:action (fn []
-                        (let [db-temp-id (d/tempid :db.part/user)
+                        ; TODO protect against incorrect ids from the client i.e.
+                        ; when not a tempid, check existing
+                        ; attributes to ensure a matching entity type in the db
+
+                        (let [is-update? (number? id)
+                              db-id (if is-update? id (d/tempid :db.part/user))
                               p (assoc
                                   (select-keys params [:person/name])
-                                  :db/id db-temp-id)
+                                  :db/id db-id)
                               {:keys [db-after tempids]} @(d/transact connection [p])]
-                          (let [{:keys [temp-id]} params]
-                            {:tempids {temp-id
-                                       [(first temp-id) (d/resolve-tempid db-after tempids db-temp-id)]}})))})
+                          (when (not is-update?)
+                            {:tempids {id (d/resolve-tempid db-after tempids db-id)}})))})
 
 ; Component and API Protocol
 

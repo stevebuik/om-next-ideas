@@ -10,11 +10,12 @@
         [clojure.walk :as wlk]
         [om.next.impl.parser :as p]
 
-        [om-next-ideas.core :refer [OmIdent]]
+        [om-next-ideas.core :refer [OmIdent Id merge-result-tree]]
         [om.tempid :as tid]
         [taoensso.timbre :as log])
   #?(:clj
-     (:import (java.util UUID))))
+     (:import [om.tempid TempId]
+              [java.util UUID])))
 
 (s/defn env-with-query
   [query-schema]
@@ -167,7 +168,7 @@
   (some idents (keys m)))
 
 (s/defn tree->normalized
-  "normalize a query result.
+  "normalize a query result. should be the same as om/tree->db in cljs.
    id-key is the pk for any record being normalized
    idents is a map where key is a field always present in a record and value is the link key for that record type"
   [denormed :- (s/pred map? "is a map")
@@ -210,17 +211,32 @@
   (and (vector? n) (= 2 (count n)) (id-keys (first n))))
 
 ; cannot use postwalk here because it sees map entries as a [k v] and that is then mistaken as a link
-(s/defn normalized->graph
+(s/defn normalized->tree
   [normalized
    tables]
-  "transform a normalized fragment (a client parser query result) into the original data that came from the service"
+  "transform a normalized fragment (a client parser query result) into the original data that came from the service.
+   should be the same as om/db->tree in cljs without needing a query arg."
   (let [id-keys (set (keys tables))]
     (cond
       (is-link? normalized id-keys) (let [table-key (first normalized)
                                           linked (get-in tables [table-key (last normalized)])]
-                                      (normalized->graph linked tables))
-      (vector? normalized) (mapv #(normalized->graph % tables) normalized)
+                                      (normalized->tree linked tables))
+      (vector? normalized) (mapv #(normalized->tree % tables) normalized)
       (map? normalized) (into {} (map (fn [[k v]]
-                                        [k (normalized->graph v tables)]) normalized))
+                                        [k (normalized->tree v tables)]) normalized))
       :default normalized)))
+
+(defn resolve-tempids [state tid->rid]
+  (wlk/prewalk #(if (-> % type (= TempId))
+                 (get tid->rid %) %)
+               state))
+
+(defn tempid-migrate [pure query tempids id-key] (resolve-tempids pure tempids))
+
+(defn portable-merge
+  "used to apply remote responses to the client state atom"
+  [state response]
+  (let [normalized (tree->normalized response :db/id
+                                     {:person/name :person/by-id})]
+    (merge-result-tree state normalized)))
 

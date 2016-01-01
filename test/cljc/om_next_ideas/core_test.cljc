@@ -84,7 +84,7 @@
                                                    :engine/torque :engine/by-id}]
                                    ;(pprint query-result)
                                    (let [{:keys [om.next/tables people]} (pu/tree->normalized query-result :db/id ident-keys)]
-                                     (= (pu/normalized->graph people tables) (:people query-result))))))]
+                                     (= (pu/normalized->tree people tables) (:people query-result))))))]
        ;(pprint (gen/sample generator 5))
        (let [check (tc/quick-check 50 (prop))
              success (= true (:result check))]
@@ -99,7 +99,7 @@
 
       (are [query-result ident-keys]
         (let [{:keys [om.next/tables people]} (pu/tree->normalized query-result :db/id ident-keys)
-              round-tripped (pu/normalized->graph people tables)]
+              round-tripped (pu/normalized->tree people tables)]
 
           (when (not= round-tripped (:people query-result))
             (pprint {:before (:people query-result)
