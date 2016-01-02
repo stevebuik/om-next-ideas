@@ -83,9 +83,12 @@
           (let [new-person (read-local [{:people [:db/id :person/name]}] nil)
                 new-person-id (-> new-person :people first :db/id)
                 new-person-ident [:person/by-id (pu/ensure-tempid new-person-id)]]
+
             ; reconciler re-runs queries and will re-render the dependant view components immediately
             (is (= (-> new-person :people first :person/name) "")
                 "local read returns new person i.e. optimistic update")
+
+            (is (-> @local-state :ui :dirty count (= 1)) "the new person is dirty")
 
             (mutate-local! {:type :app/edit-person
                             :id   new-person-ident
@@ -101,11 +104,6 @@
                                       :name "Clark Kent"} :remote))
                 "person edits are not sent to remote")
 
-            ; reconciler runs local mutation
-            (is (= {} (mutate-local! {:type :app/edit-complete
-                                      :id   new-person-ident} nil))
-                "no local change when user blurs a person")
-
             ; reconciler runs :remote to see if a remote send is required
             (let [remote-mutation (mutate-local! {:type :app/edit-complete
                                                   :id   new-person-ident} :remote)]
@@ -113,6 +111,11 @@
                                          {:db/id       ~new-person-id
                                           :person/name "Clark Kent"})])
                   "the full local copy of the new person will be sent to the remote")
+
+              ; reconciler runs local mutation thunk i.e. optimistic update
+              (mutate-local! {:type :app/edit-complete :id new-person-ident} nil)
+              (is (-> @local-state :ui :dirty count zero?)
+                  "the new person is not dirty after sync")
 
               (let [sync-response (mutate-remote! remote-mutation)
                     {:keys [tempids]} (get-in sync-response ['app/sync-person :result])

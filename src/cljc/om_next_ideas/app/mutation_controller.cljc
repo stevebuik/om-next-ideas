@@ -25,7 +25,6 @@
 
 (s/defn dirty?
   [state ident]
-  (log/debug (get-in state [:ui :dirty]) ident)
   (contains? (get-in state [:ui :dirty]) ident))
 
 (s/defn ^:always-validate message->mutation
