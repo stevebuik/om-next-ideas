@@ -101,7 +101,6 @@ They are:
     - extract mutation messages to verify against controller schema
 - is it possible to parse and generate docs for a parser?
     - if using a query schema then yes for the query
-- event bus?
 
 ## Design
 
@@ -130,6 +129,7 @@ They are:
 ## Questions that need answers
 
 - how to stop ident removal from [:ui :dirty] from re-rendering all people. ideally none should re-render.
+    - it could be from the remote response update, not the removal of dirty flags
 - how to stop Cursive from opening source files from resource dir
 - will norm/denorm fns work for all query results?
 

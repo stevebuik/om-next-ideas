@@ -4,8 +4,7 @@
        :cljs [cljs.pprint :refer [pprint]])
             [schema.core :as s]
             [om-next-ideas.parsing-utils :as pu]
-            [om-next-ideas.core :refer [OmIdent]]
-            [taoensso.timbre :as log]))
+            [om-next-ideas.core :refer [OmIdent]]))
 
 ; the mutation message translation layer for the client/app parser
 
@@ -14,6 +13,8 @@
 
 (s/defschema Message
   (s/conditional
+    (type= :app/add-car) {:type (s/eq :app/add-car)
+                          :name s/Str}
     (type= :app/add-person) {:type (s/eq :app/add-person)
                              :name s/Str}
     (type= :app/edit-person) {:type                  (s/eq :app/edit-person)
@@ -32,6 +33,11 @@
   [state-atom]
   (s/fn [msg :- Message]
     (case (:type msg)
+
+      :app/add-car (let [{:keys [name]} msg
+                         params {:temp-id  (pu/temp-id :car/by-id)
+                                 :car/name name}]
+                     `[(app/add-car ~params)])
 
       :app/add-person (let [{:keys [name]} msg
                             params {:temp-id     (pu/temp-id :person/by-id)

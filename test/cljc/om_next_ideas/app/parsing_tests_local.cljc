@@ -39,8 +39,8 @@
             parse-local (fn [q] (parse {:state db} q nil))
             mutation-controller (controller/message->mutation db)
             user-action! (fn [msg] (some-> msg
-                                       mutation-controller
-                                       parse-local))]
+                                           mutation-controller
+                                           parse-local))]
 
         (testing "read parsing"
           (are [query expected-result]
@@ -82,10 +82,7 @@
 
         (testing "write parsing"
 
-          ; TODO make this a message and use controller
-          (parse-local `[(app/add-car {:car/name   "Tesla Model S"
-                                       :car/engine {:engine/torque 440
-                                                    :engine/hp     362}})])
+          (user-action! {:type :app/add-car :name "Tesla Model S"})
 
           (let [new-car-id (->> [{:cars [:db/id :car/name]}]
                                 parse-local

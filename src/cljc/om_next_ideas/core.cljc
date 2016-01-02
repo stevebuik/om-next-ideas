@@ -17,7 +17,6 @@
 
 (defn is-uuid? [d] (instance? UUID d))
 
-; TODO can this be done using s/pred without portable instead?
 (s/defschema Id #?(:clj  (s/conditional
                            map? {:id (s/pred is-uuid? "is a temp id")}
                            :else s/Num)
