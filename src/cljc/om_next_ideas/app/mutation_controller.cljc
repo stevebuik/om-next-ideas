@@ -1,8 +1,11 @@
 (ns om-next-ideas.app.mutation-controller
   (:require
-    [schema.core :as s]
-    [om-next-ideas.parsing-utils :as pu]
-    [om-next-ideas.core :refer [OmIdent]]))
+    #?(:clj [clojure.pprint :refer [pprint]]
+       :cljs [cljs.pprint :refer [pprint]])
+            [schema.core :as s]
+            [om-next-ideas.parsing-utils :as pu]
+            [om-next-ideas.core :refer [OmIdent]]
+            [taoensso.timbre :as log]))
 
 ; the mutation message translation layer for the client/app parser
 
@@ -20,25 +23,31 @@
     (type= :app/edit-complete) {:type (s/eq :app/edit-complete)
                                 :id   OmIdent}))
 
+(s/defn dirty?
+  [state ident]
+  (log/debug (get-in state [:ui :dirty]) ident)
+  (contains? (get-in state [:ui :dirty]) ident))
+
 (s/defn ^:always-validate message->mutation
-  [msg :- Message]
-  (case (:type msg)
+  "HOF closing over app state to allow state aware mutation generation"
+  [state-atom]
+  (s/fn [msg :- Message]
+    (case (:type msg)
 
-    :app/add-person (let [{:keys [name]} msg
-                          params {:temp-id     (pu/temp-id :person/by-id)
-                                  :person/name name}]
-                      `[(app/add-person ~params)
-                        ])
+      :app/add-person (let [{:keys [name]} msg
+                            params {:temp-id     (pu/temp-id :person/by-id)
+                                    :person/name name}]
+                        `[(app/add-person ~params)])
 
-    :app/edit-person (let [{:keys [id name cars]} msg
-                           params (cond-> {:db/id (last id)}
-                                          name (assoc :person/name name)
-                                          cars (assoc :person/cars (map last cars)))]
-                       `[(app/save-person ~params)
-                         #_{:people [:db/id :person/name]}])
+      :app/edit-person (let [{:keys [id name cars]} msg
+                             params (cond-> {:db/id (last id)}
+                                            name (assoc :person/name name)
+                                            cars (assoc :person/cars (map last cars)))]
+                         `[(app/save-person ~params)])
 
-    :app/edit-complete (let [{:keys [id]} msg
-                             params {:ident id}]
-                         `[(app/sync-person ~params)])
-
-    ))
+      :app/edit-complete (let [{:keys [id]} msg
+                               params {:ident id}]
+                           ; use dirty check to avoid mutations when app first loads and
+                           ; each text input generates a blur event as the next one grabs focus
+                           (when (dirty? @state-atom id)
+                             `[(app/sync-person ~params)])))))

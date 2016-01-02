@@ -35,10 +35,11 @@
             read-remote (fn [q] (remote-parser/parse parser-api q))
             parse-local (fn [target req]
                           (pu/wrapped-local-parse {:state local-state} req target))
+            mutation-controller (controller/message->mutation local-state)
             mutate-local! (fn [msg target]
-                            (->> msg
-                                 controller/message->mutation
-                                 ((partial parse-local target))))
+                            (some->> msg
+                                     mutation-controller
+                                     (parse-local target)))
             ; TODO use server wrapper for remote mutation (and read)
             mutate-remote! (partial remote-parser/parse parser-api)
             ; init the root query TODO derive this from portable view components
@@ -120,7 +121,7 @@
                                        (into {}))]
 
                 ; migrate tempids from response
-                (swap! local-state #(pu/tempid-migrate % nil tempids-fixed nil))
+                (swap! local-state #(pu/portable-tempid-migrate % nil tempids-fixed nil))
 
                 ; reconciler re-reads after the remote response
                 (is (= (read-local root-query)
@@ -140,6 +141,9 @@
               (let [remote-update (mutate-local! {:type :app/edit-complete
                                                   :id   person1-db-ident} :remote)]
                 (mutate-remote! remote-update))
+
+              ; TODO check that an :app/edit-complete without a prior :app/edit-person
+              ; doesn't generate a mutation i.e. dirty checking in controller
 
               ; checking that remote parser updates and doesn't insert
               (is (= (read-remote [{:people [:person/name]}])

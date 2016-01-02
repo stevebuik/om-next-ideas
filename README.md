@@ -2,11 +2,13 @@
 
 An example project illustrating ideas on how to organise an om.next project
 
-This dev workflow emphasizes using clj on the jvm for most of the client (and server) code.
-This may not be your preference if you like using cljs tooling but it still uses
-figwheel and devcards when doing client dev.
+This dev workflow emphasizes using clj on the jvm for most of the client and server code.
+Note that it still uses figwheel and devcards when doing client dev of the UI layer in the browser.
 
-Definitely opinionated and reserves the right to be totally wrong. Just looking for feedback or confirmation of the ideas.
+This may not be your preference if you prefer using cljs tooling.
+
+Definitely opinionated and reserves the right to be totally wrong.
+Just looking for feedback or confirmation/critique of the ideas.
 
 ## Quick Start
 
@@ -25,7 +27,7 @@ Profit!
 
 run tests in jvm
 
-    lein do clean, test
+    lein test
 
 run test watcher (only sees clj changes)
 
@@ -46,21 +48,20 @@ run devcards
 
 ## Ideas
 
-- heavily jvm/clj focused
-- cljc all the things, even client parser
-    - easier to run CI tests for client code
+- cljc all the things (only the react components and the app init ns are cljs)
+    - easier to run CI tests for client code (lein test vs lein doo)
     - easier to run integration tests of client and server when server is clj
 - separation of concerns: using msgs for mutations from view components
-    - msgs translated into parse mutations by a controller ns because...
+    - msgs translated into parse mutations by a "controller" ns because...
+    - views should only know about rendering and sending back user events (called messages)
     - views shouldn't know about tempids
     - views shouldn't know which queries should be re-run after mutations
+    - views shouldn't need to decide if a mutation is required i.e. dirty checking
     - controller can be cljc and used in jvm unit/integration tests
-- controller is cljc to support jvm tests using messages i.e. test everything except render fn
-    - allows schemas to check messages
-    - can re-run post-mutation queries and test on jvm
-    - schemas can generate messages for test.check
+    - allows schemas to check messages from UI
+    - schemas can generate messages for test.check (experimental) generators
 - generative testing using schema generators
-    - for unit tests
+    - for unit tests (see core_test.cljc)
     - TODO for integration tests
 - parse middleware
 - schema to validate queries (especially on server where client might be hacked)
@@ -68,6 +69,21 @@ run devcards
 - components (ssierra lib) on server
     - figwheel component started as part of the server
     - figwheel app talks the the real api during development
+
+### Important cljc fns
+
+To enable a simulated client on the jvm, a few key fns provided by om.next in cljs needed to be
+ported to cljc. Each of these is a guess at the correct behaviour but is likely to not be totally
+correct for all use-cases.
+
+If you spot a problem, please log an issue so a test/fix can be created. Or even better, submit a pull-request
+with a test and fix.
+
+They are:
+
+- normalized->tree and tree->normalized
+- resolve-tempids
+- portable-merge
 
 ### TODO / Future
 
@@ -93,12 +109,11 @@ run devcards
     - cljc : anything that can be tested in the jvm
     - cljs : code that only runs in a browser e.g. view layer, app start, devcards
     - clj  : server/remote code
-- messages from UI layer include OmIdents but read/write parse calls use Id
 
-### Observations
-
-- can't use db->tree and tree->db since they are (cljs only)
-- can't use migrate to process tempids returned by remote (cljs only)
+- interesting tests
+    - parsing-tests-local : stateful tests of a client without a server/remote
+    - parsing-integration-tests : stateful tests of a client and a server/remote together
+    - core-test : unit and test.check for ported om.next fns
 
 ### Gotchas
 
@@ -114,7 +129,7 @@ run devcards
 
 ## Questions that need answers
 
+- how to stop ident removal from [:ui :dirty] from re-rendering all people. ideally none should re-render.
 - how to stop Cursive from opening source files from resource dir
-- how should controller have access to state? there are cases for stateful msg transformation
 - will norm/denorm fns work for all query results?
 

@@ -74,14 +74,24 @@
 
 ; MUTATION
 
+(s/defn dirty!
+  [state
+   record-id :- OmIdent]
+  (if (get-in state [:ui :dirty])
+    (update-in state [:ui :dirty] conj record-id)
+    (assoc-in state [:ui :dirty] #{record-id})))
+
 (s/defmethod mutate 'app/error [& args] {:action #(/ 1 0)})
 
 (s/defmethod mutate 'app/add-car
              [{:keys [state]} _
               {:keys [car/name car/engine]}]
              {:action (fn []
-                        (swap! state #(let [[_ car-id] (pu/temp-id :car/by-id)]
+                        ; FIXME remove tempid creation from here. should be in controller
+                        (swap! state #(let [ident (pu/temp-id :car/by-id)
+                                            [_ car-id] ident]
                                        (-> %
+                                           (dirty! ident)
                                            (assoc-in [:om.next/tables :car/by-id car-id]
                                                      {:db/id    car-id
                                                       :car/name name})))))})
@@ -91,6 +101,7 @@
                                                 :person/name s/Str}]
              {:action (fn []
                         (swap! state #(-> %
+                                          (dirty! temp-id)
                                           (assoc-in (concat [:om.next/tables] temp-id) {:db/id       (last temp-id)
                                                                                         :person/name name})
                                           (update-in [:people] conj temp-id))))})
@@ -102,7 +113,7 @@
                                                           (s/optional-key :person/cars) [Id]}]
              {:action (fn []
                         (swap! state (fn [s]
-                                       (cond-> s
+                                       (cond-> (dirty! s [:person/by-id id])
                                                name (assoc-in [:om.next/tables :person/by-id id :person/name]
                                                               name)
                                                cars (assoc-in [:om.next/tables :person/by-id id :person/cars]
@@ -111,10 +122,13 @@
 (s/defmethod mutate 'app/sync-person
              [{:keys [state ast target]} _
               {:keys [ident]} :- {:ident OmIdent}]
-             (when (= :remote target)
+             (case target
+               nil {:action (fn []
+                              ; TODO how to stop this re-rendering all people
+                              (swap! state update-in [:ui :dirty] disj ident))}
                ; hydrate the local copy of the person and send it to the remote
-               (let [person (-> ident (pu/normalized->tree (:om.next/tables @state)))]
-                 {:remote (-> ast
-                              (update-in [:params] dissoc :ident)
-                              (update-in [:params] merge person))})))
+               :remote (let [person (-> ident (pu/normalized->tree (:om.next/tables @state)))]
+                         {:remote (-> ast
+                                      (update-in [:params] dissoc :ident)
+                                      (update-in [:params] merge person))})))
 

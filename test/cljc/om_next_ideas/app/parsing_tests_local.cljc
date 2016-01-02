@@ -37,8 +37,9 @@
                                                                      :car/name      :car/by-id
                                                                      :engine/torque :engine/by-id}))
             parse-local (fn [q] (parse {:state db} q nil))
-            user-action! (fn [msg] (-> msg
-                                       controller/message->mutation
+            mutation-controller (controller/message->mutation db)
+            user-action! (fn [msg] (some-> msg
+                                       mutation-controller
                                        parse-local))]
 
         (testing "read parsing"
@@ -81,6 +82,7 @@
 
         (testing "write parsing"
 
+          ; TODO make this a message and use controller
           (parse-local `[(app/add-car {:car/name   "Tesla Model S"
                                        :car/engine {:engine/torque 440
                                                     :engine/hp     362}})])

@@ -227,11 +227,16 @@
       :default normalized)))
 
 (defn resolve-tempids [state tid->rid]
-  (wlk/prewalk #(if (-> % type (= TempId))
+  (wlk/prewalk #(if (-> % type (= #?(:clj  TempId
+                                     :cljs om.tempid/TempId)))
                  (get tid->rid %) %)
                state))
 
-(defn tempid-migrate [pure query tempids id-key] (resolve-tempids pure tempids))
+(defn portable-tempid-migrate
+  [pure _ tempids _]
+  (if (seq tempids)
+    (resolve-tempids pure tempids)
+    pure))
 
 (defn portable-merge
   "used to apply remote responses to the client state atom"

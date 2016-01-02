@@ -5,6 +5,7 @@
     ; this is because sablano still uses react 0.13. when it moves to 0.14, remove om.dom
     [om.dom :as dom]
     [om.next :as om :refer-macros [defui]]
+    [taoensso.timbre :as log]
     [sablono.core :refer-macros [html]]))
 
 (defui Person
@@ -18,7 +19,7 @@
   (render [this]
     (let [{:keys [send!]} (om/shared this)
           {:keys [person/name]} (om/props this)]
-      (pprint [:render-person (om/props this)])
+      (log/debug :render-person (om/props this))
       (html
         [:div
          [:input {:value      name
@@ -38,6 +39,7 @@
   (render [this]
     (let [{:keys [send!]} (om/shared this)
           {:keys [people]} (om/props this)]
+      (log/debug :render-app (keys (om/props this)))
       (html
         [:div
          [:a {:href     "#"
