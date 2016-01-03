@@ -81,8 +81,9 @@
                                               :car/name   "Tesla Roadster",
                                               :car/engine {:engine/torque 270}}]}]})
 
-          (is (thrown? RuntimeException (parse {:state db} [:error]))
-              "read exceptions are thrown"))
+          #?(:clj
+             (is (thrown? RuntimeException (parse {:state db} [:error]))
+                 "read exceptions are thrown")))
 
         (testing "write parsing"
 
@@ -94,7 +95,7 @@
                 fixed-car-id (pu/ensure-tempid new-car-id)]
 
             ; leaving this assertion in place so it will fail when the bug is fixed and pu/ensure-tempid can be removed
-            (is (not (instance? om.tempid.TempId new-car-id)) "bug that converts tempids in read parses still exists")
+            #?(:clj (is (not (instance? om.tempid.TempId new-car-id)) "bug that converts tempids in read parses still exists"))
 
             ; user adds a new person locally
             (user-action! {:type :app/add-person :name ""})
