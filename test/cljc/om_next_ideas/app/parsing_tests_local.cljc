@@ -65,17 +65,17 @@
               {:db/id 1001 :person/name "Elon Musk"}]}
 
             ; 3 level join
-            [{:people [:db/id
-                       {:person/cars [:db/id :car/name
-                                      {:car/engine [:engine/torque]}]}]}]
-            {:people [{:db/id       1000,
-                       :person/cars [{:db/id      2000
-                                      :car/name   "Audi R8",
-                                      :car/engine {:engine/torque 540}}]}
-                      {:db/id       1001,
-                       :person/cars [{:db/id      2001
-                                      :car/name   "Tesla Roadster",
-                                      :car/engine {:engine/torque 270}}]}]})
+            [{:people-display [:db/id
+                               {:person/cars [:db/id :car/name
+                                              {:car/engine [:engine/torque]}]}]}]
+            {:people-display [{:db/id       1000,
+                               :person/cars [{:db/id      2000
+                                              :car/name   "Audi R8",
+                                              :car/engine {:engine/torque 540}}]}
+                              {:db/id       1001,
+                               :person/cars [{:db/id      2001
+                                              :car/name   "Tesla Roadster",
+                                              :car/engine {:engine/torque 270}}]}]})
 
           (is (thrown? RuntimeException (parse {:state db} [:error]))
               "read exceptions are thrown"))

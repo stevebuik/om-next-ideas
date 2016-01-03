@@ -45,7 +45,7 @@ run full-stack figwheel
 
     (user/go) from repl
 
-and then browse localhost:8080
+and then browse localhost:3449
 
 run devcards
 
@@ -96,7 +96,6 @@ They are:
 ### TODO / Future
 
 - build an om.next main.js to compare portable code vs cljs migrate etc
-- reloaded dev ns
 - devcards working
 - cljs repl (using piggieback) working
 - check cljc parser matches output of om/db->tree in devcards tests
