@@ -48,7 +48,7 @@
                              params (cond-> {:db/id (last id)}
                                             name (assoc :person/name name)
                                             cars (assoc :person/cars (map last cars)))]
-                         `[(app/save-person ~params)])
+                         `[(app/save-person ~params) {:people-display [:db/id :person/name]}])
 
       :app/edit-complete (let [{:keys [id]} msg
                                params {:ident id}]

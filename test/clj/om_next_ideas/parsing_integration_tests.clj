@@ -43,16 +43,19 @@
             ; TODO use server wrapper for remote mutation (and read)
             mutate-remote! (partial remote-parser/parse parser-api)
             ; init the root query TODO derive this from portable view components
-            root-query [{:people [:db/id :person/name]}]]
+            root-query [{:people-edit [:db/id :person/name]}
+                        {:people-display [:db/id :person/name]}]]
 
         ; reconciler reads local state to perform first render
         (is (= (read-local root-query nil)
-               {:people []})
+               {:people-edit    []
+                :people-display []})
             "local read returns no people")
 
         ; reconciler runs root query passing :remote target to determine if a remote send is required
         (let [remote-query (read-local root-query :remote)]
-          (is (= remote-query root-query) "root query is sent to remote after initial render")
+          (is (= remote-query [{:people [:db/id :person/name]}])
+              "root query is transformed (:people-edit -> :people) and sent to remote after initial render")
 
           ; send fn does remote read using root query
           (let [remote-response (read-remote remote-query)]
@@ -63,7 +66,8 @@
 
         ; reconciler re-runs root-query after state changed in remote callback processing
         (is (= (read-local root-query nil)
-               {:people []})
+               {:people-edit    []
+                :people-display []})
             "local read after remote response still returns no people because server db is empty")
 
         ; reconciler re-runs runs root-query again to see if another remote query is required
@@ -80,12 +84,12 @@
           ; reconciler runs :remote mutation to see if a remote call is required
           (is (= (mutate-local! msg-from-ui :remote) []) "add person is not sent to server")
 
-          (let [new-person (read-local [{:people [:db/id :person/name]}] nil)
-                new-person-id (-> new-person :people first :db/id)
+          (let [new-person (read-local [{:people-edit [:db/id :person/name]}] nil)
+                new-person-id (-> new-person :people-edit first :db/id)
                 new-person-ident [:person/by-id (pu/ensure-tempid new-person-id)]]
 
             ; reconciler re-runs queries and will re-render the dependant view components immediately
-            (is (= (-> new-person :people first :person/name) "")
+            (is (= (-> new-person :people-edit first :person/name) "")
                 "local read returns new person i.e. optimistic update")
 
             (is (-> @local-state :ui :dirty count (= 1)) "the new person is dirty")
@@ -95,8 +99,8 @@
                             :name "Clark Kent"} nil)
 
             ; reconciler refreshes dependant views
-            (is (= (read-local [{:people [:person/name]}] nil)
-                   {:people [{:person/name "Clark Kent"}]})
+            (is (= (read-local [{:people-edit [:person/name]}] nil)
+                   {:people-edit [{:person/name "Clark Kent"}]})
                 "local write is seen by re-render")
 
             (is (= [] (mutate-local! {:type :app/edit-person
@@ -128,12 +132,14 @@
 
                 ; reconciler re-reads after the remote response
                 (is (= (read-local root-query)
-                       {:people [{:db/id       (get tempids new-person-id)
-                                  :person/name "Clark Kent"}]})
+                       {:people-edit    [{:db/id       (get tempids new-person-id)
+                                          :person/name "Clark Kent"}]
+                        :people-display [{:db/id       (get tempids new-person-id)
+                                          :person/name "Clark Kent"}]})
                     "queries return the updated id after migrate")))
 
             (let [person1-db-ident (->> (read-local root-query)
-                                        :people first :db/id
+                                        :people-edit first :db/id
                                         (vector :person/by-id))]
               ; user changes the person using the db/id
               (mutate-local! {:type :app/edit-person

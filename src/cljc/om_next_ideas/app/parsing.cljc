@@ -21,12 +21,19 @@
 
 ; READ
 
-(s/defmethod readf :people
+(s/defmethod readf :people-edit
              [{:keys [state query target ast] :as env} :- (pu/env-with-query PersonQuery)
               _ _]
              (let [people-absent? (nil? (:people @state))]
                (cond-> {:value (pu/parse-join-multiple env query :person (:people @state))}
-                       (and (= :remote target) people-absent?) (assoc :remote ast))))
+                       (and (= :remote target) people-absent?) (assoc :remote (assoc ast
+                                                                                :dispatch-key :people
+                                                                                :key :people)))))
+
+(s/defmethod readf :people-display
+             [{:keys [state query target ast] :as env} :- (pu/env-with-query PersonQuery)
+              _ _]
+             {:value (pu/parse-join-multiple env query :person (:people @state))})
 
 (s/defmethod readf :person
              [{:keys [state query] :as env} :- (pu/env-with-query PersonQuery)

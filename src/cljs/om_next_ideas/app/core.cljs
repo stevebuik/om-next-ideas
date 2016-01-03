@@ -17,7 +17,7 @@
 (enable-console-print!)
 
 ; set to debug to see components rendering
-(log/set-level! :debug)
+(log/set-level! :info)
 
 ; client state is figwheel-reloadable
 (defonce db (atom {}))
@@ -35,9 +35,9 @@
   (let [mutation-controller (controller/message->mutation db)
         parse (fn [source msg-type msg]
                 (some->> (assoc msg :type msg-type)
-                     mutation-controller
-                     ; TODO how to use the logging wrapper here?
-                     (om/transact! source)))]
+                         mutation-controller
+                         ; TODO how to use the logging wrapper here?
+                         (om/transact! source)))]
     (om/reconciler
       {:state      db
        :normalize  false                                    ; using cljc normalize fns

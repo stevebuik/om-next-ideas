@@ -59,8 +59,8 @@
                     {:db/id 2001 :car/name "Tesla Roadster"}]}
 
             ; 1 level join
-            [{:people [:db/id :person/name]}]
-            {:people
+            [{:people-edit [:db/id :person/name]}]
+            {:people-edit
              [{:db/id 1000 :person/name "Tony Stark"}
               {:db/id 1001 :person/name "Elon Musk"}]}
 
@@ -95,9 +95,9 @@
             ; user adds a new person locally
             (user-action! {:type :app/add-person :name ""})
 
-            (let [new-person-id (->> [{:people [:db/id :person/name]}]
+            (let [new-person-id (->> [{:people-edit [:db/id :person/name]}]
                                      parse-local
-                                     :people (filter #(= "" (:person/name %)))
+                                     :people-edit (filter #(= "" (:person/name %)))
                                      first :db/id pu/ensure-tempid)]
 
               ; user changes the new person i.e. is editing the name

@@ -4,6 +4,7 @@ An example project illustrating ideas on how to organise an om.next project
 
 This dev workflow emphasizes using clj on the jvm for most of the client and server code.
 Note that it still uses figwheel and devcards when doing client dev of the UI layer in the browser.
+This also means that lein/component (with reloaded workflow) is the driver of the project - not a script/figwheel.clj file
 
 This may not be your preference if you prefer using cljs tooling.
 
@@ -18,7 +19,7 @@ Then read/run the integration test to see client/server data flow
 
 Then run figwheel service to repeat the integration test from a real UI
     - run quickie while working on client or server code
-    - run doo ?
+    - run doo autotest TODO
     - make mods to any part of code and see autotests verify correctness and figwheel re-render
 
 Profit!
@@ -35,22 +36,27 @@ run test watcher (only sees clj changes)
 
 run tests in in cljs
 
-    lein doo
+    lein doo ; TODO
 or
 
-    manually via devcards
+    manually via devcards ; TODO
 
 run full-stack figwheel
 
     (user/go) from repl
 
+and then browse localhost:8080
+
 run devcards
+
+    ; TODO
 
 ## Ideas
 
 - cljc all the things (only the react components and the app init ns are cljs)
+    - everything except the view layer can be tested on the jvm
     - easier to run CI tests for client code (lein test vs lein doo)
-    - easier to run integration tests of client and server when server is clj
+    - easier to run integration tests of client and server when server is clj e.g. datomic
 - separation of concerns: using msgs for mutations from view components
     - msgs translated into parse mutations by a "controller" ns because...
     - views should only know about rendering and sending back user events (called messages)
@@ -64,11 +70,13 @@ run devcards
     - for unit tests (see core_test.cljc)
     - TODO for integration tests
 - parse middleware
+    - partially built, waiting to see what the prescribed error handling design looks like
 - schema to validate queries (especially on server where client might be hacked)
 - :always-validate on mutations
 - components (ssierra lib) on server
     - figwheel component started as part of the server
     - figwheel app talks the the real api during development
+- dirty tracking of local state data to control when remote mutation is required
 
 ### Important cljc fns
 
@@ -87,8 +95,10 @@ They are:
 
 ### TODO / Future
 
-- composability: re-usable widgets use ::ns/foo to keep state in single atom but hygienically. N of same widgets used concurrently?
-- abstract components
+- build an om.next main.js to compare portable code vs cljs migrate etc
+- reloaded dev ns
+- devcards working
+- cljs repl (using piggieback) working
 - check cljc parser matches output of om/db->tree in devcards tests
     - maybe even generative
 - remote query generation
@@ -118,18 +128,20 @@ They are:
 
 - lein quickie does not see changes to cljc files. fixed yet?
 
-- using logging on tempids is tricky because pprint and pr-str display tempids differently.
+- using logging with tempids is tricky because pprint and pr-str display tempids differently.
   pprint vs println display differently when using the same value.
 
 
 ## Roadmap / Need help
 
 - get lein doo working
+- get lein quickie to see changes to cljc files
 
 ## Questions that need answers
 
+- how to re-render only the matching display component when a edit component mutates a change?
 - how to stop ident removal from [:ui :dirty] from re-rendering all people. ideally none should re-render.
     - it could be from the remote response update, not the removal of dirty flags
 - how to stop Cursive from opening source files from resource dir
-- will norm/denorm fns work for all query results?
+- will norm/denorm fns work for all query types/results?
 
