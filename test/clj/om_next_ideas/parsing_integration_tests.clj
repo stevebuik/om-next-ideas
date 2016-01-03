@@ -162,4 +162,4 @@
                        {:people [{:person/name "Clarks Kent"}]})
                     "remote write updates existing person")))))))))
 
-(run-tests)
+;(run-tests)

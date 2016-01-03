@@ -1,12 +1,14 @@
 (ns om-next-ideas.figwheel-component
   (:require
     [com.stuartsierra.component :as component]
-    [figwheel-sidecar.repl-api :as ra]))
+    [figwheel-sidecar.repl-api :as ra]
+    [schema.core :as s]))
 
 
-(def figwheel-config
+(s/defn ^:always-validate figwheel-config
+  [build-id :- (s/enum "dev" "devcards")]
   {:figwheel-options {:css-dirs ["resources/public/css"]}
-   :build-ids        ["dev"]
+   :build-ids        [build-id]
    :all-builds       [{:id           "dev"
                        :figwheel     true
                        :source-paths ["src/cljs" "src/cljc"]
@@ -17,12 +19,13 @@
                                       :verbose    true}}
                       {:id           "devcards"
                        :figwheel     {:devcards true}
-                       :source-paths ["src/cljs" "src/cljc"]
-                       :compiler     {:main       'om-next-ideas.app.core
+                       :source-paths ["src/cljs" "src/cljc" "test/cljc"]
+                       :compiler     {:main       'om-next-ideas.app.devcards
                                       :asset-path "js"
                                       :output-to  "resources/public/js/devcards.js"
                                       :output-dir "resources/public/js"
-                                      :verbose    true}}]})
+                                      :verbose    true
+                                      :source-map-timestamp true}}]})
 
 (def handler nil)
 
@@ -39,8 +42,8 @@
     (ra/stop-autobuild)
     c))
 
-(defn figwheel []
-  (component/using (map->Figwheel {:figwheel-config figwheel-config}) [:routes]))
+(defn figwheel [build]
+  (component/using (map->Figwheel {:figwheel-config (figwheel-config build)}) [:routes]))
 
 (defn repl []
   (ra/cljs-repl))

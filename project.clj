@@ -32,5 +32,6 @@
                    :clean-targets ^{:protect false} ["resources/public/js" :target]
                    :dependencies  [[figwheel-sidecar "0.5.0-1" :scope "provided"
                                     :exclusions [commons-codec ring/ring-core org.codehaus.plexus/plexus-utils org.clojure/tools.reader org.clojure/clojurescript]]
+                                   [devcards "0.2.0-8" :scope "provided" :exclusions [cljsjs/react]]
 
                                    [org.clojure/test.check "0.9.0"]]}})

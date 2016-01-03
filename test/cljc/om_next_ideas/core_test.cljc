@@ -2,23 +2,30 @@
   (:require
     #?(:clj [clojure.pprint :refer [pprint]]
        :cljs [cljs.pprint :refer [pprint]])
-            [schema.core :as s]
 
+            [schema.core :as s]
             [clojure.walk :as wlk]
 
     #?(:clj
             [schema.experimental.generators :as s-gen])
 
-            [clojure.test.check.generators]
-            [clojure.test.check.clojure-test]
+    #?(:clj
+            [clojure.test.check.generators])
+    #?(:clj
+            [clojure.test.check.clojure-test])
 
-            [clojure.test :refer :all]
-            [clojure.test.check :as tc]
-            [clojure.test.check.generators :as gen]
-            [clojure.test.check.properties :as prop]
+    #?(:clj
+            [clojure.test :refer [deftest run-tests testing are is]]
+       :cljs [cljs.test :refer-macros [are testing is]])
+
+    #?(:clj
+            [clojure.test.check :as tc])
+    #?(:clj
+            [clojure.test.check.generators :as gen])
+    #?(:clj
+            [clojure.test.check.properties :as prop])
 
             [om-next-ideas.parsing-utils :as pu]
-            [om-next-ideas.remote-core :refer :all]
             [taoensso.timbre :as log]))
 
 ; schemas used to generate sample databases for round-trip tests
@@ -27,10 +34,11 @@
 (s/defschema CarId (s/pred pos? "car id"))
 (s/defschema EngineId (s/pred pos? "engine id"))
 
-(defn pos-int-generator
-  "returns a integer generator for integers above a min value"
-  [min]
-  (gen/fmap #(+ % min) gen/nat))
+#?(:clj
+   (defn pos-int-generator
+     "returns a integer generator for integers above a min value"
+     [min]
+     (gen/fmap #(+ % min) gen/nat)))
 
 (s/defschema Engine {:db/id                      EngineId
                      :engine/torque              s/Int
@@ -120,4 +128,4 @@
          :car/name      :car/by-id
          :engine/torque :engine/by-id}))))
 
-(run-tests)
+; #?(:clj (run-tests))

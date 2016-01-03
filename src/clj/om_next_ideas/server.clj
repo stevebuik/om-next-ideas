@@ -15,6 +15,7 @@
 
 (def routes
   ["" {"/"            :index
+       "/devcards"    :devcards
        "/favicon.ico" :fav-icon
        "/api"
                       {:post {[""] :api}}}])
@@ -40,6 +41,8 @@
         :fav-icon {:body "n/a"}
         :index (assoc (resource-response "html/index.html" {:root "public"})
                  :headers {"Content-Type" "text/html"})
+        :devcards (assoc (resource-response "html/devcards.html" {:root "public"})
+                    :headers {"Content-Type" "text/html"})
         :api (->> (:body req)
                   transit-inputstream->clj
                   (api/parse parser)

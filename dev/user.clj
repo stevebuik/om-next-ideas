@@ -9,8 +9,8 @@
 
 (defn init
   "Constructs the current development system."
-  []
-  (alter-var-root #'system (constantly (system/system "datomic:mem:/ideas" {:figwheel (fw/figwheel)}))))
+  [cljs-build]
+  (alter-var-root #'system (constantly (system/system "datomic:mem:/ideas" {:figwheel (fw/figwheel cljs-build)}))))
 
 (comment
   ; use any of the fns in the ra ns to perform figwheel operations e.g.
@@ -33,10 +33,12 @@
   :stopped)
 
 (defn go
-  "Initializes the current development system and starts it running."
-  []
-  (init)
-  (start))
+  "Initializes the current development system and starts it running.
+  Use 'dev' or 'devcards' to choose the cljs build to run. default is dev."
+  ([] (go "dev"))
+  ([build-id]
+   (init build-id)
+   (start)))
 
 (defn reset []
   (stop)

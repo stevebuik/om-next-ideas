@@ -1,8 +1,12 @@
 (ns om-next-ideas.app.parsing-tests-local
+  #?(:cljs (:require-macros
+             [devcards.core :refer [deftest]]))
   (:require
     #?(:clj [clojure.pprint :refer [pprint]]
        :cljs [cljs.pprint :refer [pprint]])
-            [clojure.test :refer [run-tests deftest testing are is]]
+    #?(:clj
+            [clojure.test :refer [deftest run-tests testing are is]]
+       :cljs [cljs.test :refer-macros [are testing is]])
             [taoensso.timbre :as log]
             [om.next.impl.parser :as p]
             [schema.core :as s]
@@ -127,4 +131,4 @@
             (is (log/with-log-level :fatal (parse-local `[(app/error)]))
                 "mutation exceptions are silently swallowed (but the middleware can log them)")))))))
 
-(run-tests)
+; #?(:clj (run-tests))

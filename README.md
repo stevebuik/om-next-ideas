@@ -3,24 +3,30 @@
 An example project illustrating ideas on how to organise an om.next project
 
 This dev workflow emphasizes using clj on the jvm for most of the client and server code.
+
 Note that it still uses figwheel and devcards when doing client dev of the UI layer in the browser.
+
 This also means that lein/component (with reloaded workflow) is the driver of the project - not a script/figwheel.clj file
 
-This may not be your preference if you prefer using cljs tooling.
+This may not be your preference if you prefer using cljs tooling. This project is quite opinionated and reserves the right to be totally wrong.
 
-Definitely opinionated and reserves the right to be totally wrong.
-Just looking for feedback or confirmation/critique of the ideas.
+I'm just looking for feedback or confirmation/critique of the ideas.
+
+Will this become a library? No plans at the moment, just use it to copy config.
 
 ## Quick Start
 
-Start by watching Tony Kays video on how om.next works. This helps understand the steps in the integration test
+Start by watching [Tony Kays video](https://www.youtube.com/watch?v=IlNrmKYA7Ig) on how om.next works. This helps understand the steps in the integration test
 
 Then read/run the integration test to see client/server data flow
 
-Then run figwheel service to repeat the integration test from a real UI
-    - run quickie while working on client or server code
-    - run doo autotest TODO
-    - make mods to any part of code and see autotests verify correctness and figwheel re-render
+Then run figwheel service to repeat the integration test steps from the real UI
+
+While playing with the app and source you may also concurrently:
+
+- run quickie while working on client or server code
+- run doo autotest TODO
+- make mods to any part of code and see autotests verify correctness and figwheel re-render
 
 Profit!
 
@@ -39,7 +45,7 @@ run tests in in cljs
     lein doo ; TODO
 or
 
-    manually via devcards ; TODO
+    manually via devcards
 
 run full-stack figwheel
 
@@ -49,7 +55,10 @@ and then browse localhost:3449
 
 run devcards
 
-    ; TODO
+    (user/stop) ; if figwheel is already running
+    (user/go "devcards")
+
+and then browse localhost:3449/devcards
 
 ## Ideas
 
@@ -96,7 +105,6 @@ They are:
 ### TODO / Future
 
 - build an om.next main.js to compare portable code vs cljs migrate etc
-- devcards working
 - cljs repl (using piggieback) working
 - check cljc parser matches output of om/db->tree in devcards tests
     - maybe even generative
