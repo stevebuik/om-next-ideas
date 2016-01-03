@@ -14,6 +14,8 @@ I'm just looking for feedback or confirmation/critique of the ideas.
 
 Will this become a library? No plans at the moment, just use it to copy config.
 
+Current CI Status : [![Circle CI](https://circleci.com/gh/stevebuik/om-next-ideas.svg?style=svg)](https://circleci.com/gh/stevebuik/om-next-ideas)
+
 ## Quick Start
 
 Start by watching [Tony Kays video](https://www.youtube.com/watch?v=IlNrmKYA7Ig) on how om.next works. This helps understand the steps in the integration test
