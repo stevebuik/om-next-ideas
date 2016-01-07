@@ -44,7 +44,7 @@
        :shared     {:send! parse}
        :parser     (om/parser {:read readf :mutate mutate})
        :send       (transit-post "/api")
-       :merge-tree pu/portable-merge
+       :merge-tree (pu/portable-merge {:person/name :person/by-id})
        :id-key     :db/id
        :migrate    pu/portable-tempid-migrate})))
 

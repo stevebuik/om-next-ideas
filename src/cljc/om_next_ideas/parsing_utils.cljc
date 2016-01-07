@@ -239,9 +239,9 @@
     pure))
 
 (defn portable-merge
-  "used to apply remote responses to the client state atom"
-  [state response]
-  (let [normalized (tree->normalized response :db/id
-                                     {:person/name :person/by-id})]
-    (merge-result-tree state normalized)))
+  "HOF returning a fn used to apply remote responses to the client state atom"
+  [key-map]
+  (fn [state response]
+    (let [normalized (tree->normalized response :db/id key-map)]
+      (merge-result-tree state normalized))))
 
