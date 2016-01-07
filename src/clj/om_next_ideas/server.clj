@@ -32,6 +32,16 @@
     (t/write writer d)
     (.toString out)))
 
+(defn raise-tempids
+  "post-process a parse, checking for tempids and lifting them one level up, if present"
+  [res]
+  (->> res
+       (map (fn [[k v]]
+              (if (get-in v [:result :tempids])
+                [k (:result v)]
+                [k v])))
+       (into {})))
+
 (defn handler
   [parser req]
   (let [match (bidi/match-route routes (:uri req)
@@ -46,6 +56,7 @@
         :api (->> (:body req)
                   transit-inputstream->clj
                   (api/parse parser)
+                  raise-tempids
                   clj->transit
                   (assoc {:status  200
                           :headers {"Content-Type" "application/transit+json"}}
