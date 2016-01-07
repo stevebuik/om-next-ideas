@@ -62,6 +62,9 @@ run devcards
 
 and then browse localhost:3449/devcards
 
+Note: if you want to use the devtools cljs formatter then you can
+[enable custom formatters] (https://github.com/binaryage/cljs-devtools)
+
 ## Ideas
 
 - cljc all the things (only the react components and the app init ns are cljs)
