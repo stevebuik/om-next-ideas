@@ -6,17 +6,30 @@
     [com.stuartsierra.component :as component]
     [schema.core :as s]
     [datomic.api :as d]
-    [taoensso.timbre :as log])
-  (:import (om.tempid TempId)))
+    [taoensso.timbre :as log]))
 
 ; read fns
 
 (s/defmethod readf :people
              [{:keys [db query]} _ params]
+             ; TODO use a schema to validate query sent from client
              (let [q '[:find [(pull ?p selector) ...]
                        :in $ selector
                        :where
                        [?p :person/name]]]
+               (log/trace {:query query
+                           :q     q})
+               (->> query
+                    (d/q q db)
+                    (hash-map :value))))
+
+(s/defmethod readf :cars
+             [{:keys [db query]} _ params]
+             ; TODO use a schema to validate query sent from client
+             (let [q '[:find [(pull ?p selector) ...]
+                       :in $ selector
+                       :where
+                       [?p :car/name]]]
                (log/trace {:query query
                            :q     q})
                (->> query
@@ -29,25 +42,34 @@
                           :connection s/Any
                           s/Keyword   s/Any})
 
-(s/defmethod ^:always-validate mutate 'app/sync-person
+(s/defn map-type :- (s/enum :person :car)
+  "determine the entity type from a maps keys"
+  [m]
+  (->> (keys m)
+       (some #{:person/name :car/name})
+       namespace
+       keyword))
+
+(s/defn type= [t] (fn [m] (= t (map-type m))))
+
+(s/defschema SyncableMap (s/conditional
+                           (type= :person) {:db/id       Id
+                                            :person/name s/Str}
+                           (type= :car) {:db/id    Id
+                                         :car/name s/Str}))
+
+(s/defmethod ^:always-validate mutate 'app/sync
              [{:keys [db connection]} :- MutationEnv
               _
-              ; TODO NEXT change :db/id to be OmIdent and remove temp-id
-              ; since that can be derived from the type of :db/id
-              ; and :tempids can be conditionally returned based on that
-              ; i.e. sync-person can become sync-anything with schema to
-              ; control what can be sent
-              {:keys [db/id] :as params} :- {:db/id       Id
-                                             :person/name s/Str}]
+              {:keys [db/id] :as params} :- SyncableMap]
              {:action (fn []
-                        ; TODO protect against incorrect ids from the client i.e.
-                        ; when not a tempid, check existing
-                        ; attributes to ensure a matching entity type in the db
-
                         (let [is-update? (number? id)
                               db-id (if is-update? id (d/tempid :db.part/user))
+                              entity-keys (case (map-type params)
+                                            :person [:person/name]
+                                            :car [:car/name])
                               p (assoc
-                                  (select-keys params [:person/name])
+                                  (select-keys params entity-keys)
                                   :db/id db-id)
                               {:keys [db-after tempids]} @(d/transact connection [p])]
                           (when (not is-update?)

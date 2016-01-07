@@ -42,9 +42,10 @@
                                                                      :engine/torque :engine/by-id}))
             parse-local (fn [q] (parse {:state db} q nil))
             mutation-controller (controller/message->mutation db)
-            user-action! (fn [msg] (some-> msg
-                                           mutation-controller
-                                           parse-local))]
+            user-action! (fn [t msg] (some-> msg
+                                             (assoc :type t)
+                                             mutation-controller
+                                             parse-local))]
 
         (testing "read parsing"
           (are [query expected-result]
@@ -87,18 +88,22 @@
 
         (testing "write parsing"
 
-          (user-action! {:type :app/add-car :name "Tesla Model S"})
+          (user-action! :app/add-car {:name "Tesla"})
 
           (let [new-car-id (->> [{:cars [:db/id :car/name]}]
                                 parse-local
-                                :cars (filter #(= "Tesla Model S" (:car/name %))) first :db/id)
+                                :cars (filter #(= "Tesla" (:car/name %))) first :db/id)
                 fixed-car-id (pu/ensure-tempid new-car-id)]
+
+            ; ensuring cars can be edited locally
+            (user-action! :app/edit-car {:id   [:car/by-id fixed-car-id]
+                                         :name "Tesla Model S"})
 
             ; leaving this assertion in place so it will fail when the bug is fixed and pu/ensure-tempid can be removed
             #?(:clj (is (not (instance? om.tempid.TempId new-car-id)) "bug that converts tempids in read parses still exists"))
 
             ; user adds a new person locally
-            (user-action! {:type :app/add-person :name ""})
+            (user-action! :app/add-person {:name ""})
 
             (let [new-person-id (->> [{:people-edit [:db/id :person/name]}]
                                      parse-local
@@ -106,18 +111,15 @@
                                      first :db/id pu/ensure-tempid)]
 
               ; user changes the new person i.e. is editing the name
-              (user-action! {:type :app/edit-person
-                             :id   [:person/by-id new-person-id]
-                             :name "Clark Kent"})
+              (user-action! :app/edit-person {:id   [:person/by-id new-person-id]
+                                              :name "Clark Kent"})
 
               ; user finishes local editing
-              (user-action! {:type :app/edit-complete
-                             :id   [:person/by-id new-person-id]}))
+              (user-action! :app/edit-complete {:id [:person/by-id new-person-id]}))
 
             ; user adds a car to the new person, try this with new-car-id to see the tempid bug
-            (user-action! {:type :app/edit-person
-                           :id   [:person/by-id 1001]
-                           :cars [[:car/by-id 2001] [:car/by-id fixed-car-id]]})
+            (user-action! :app/edit-person {:id   [:person/by-id 1001]
+                                            :cars [[:car/by-id 2001] [:car/by-id fixed-car-id]]})
 
             ; optimistic update will re-read the cars list so ensure that the new car is seen by the query
             (is (= (->> `[({:person [:person/name {:person/cars [:db/id :car/name]}]}
@@ -132,4 +134,3 @@
             (is (log/with-log-level :fatal (parse-local `[(app/error)]))
                 "mutation exceptions are silently swallowed (but the middleware can log them)")))))))
 
-; #?(:clj (run-tests))

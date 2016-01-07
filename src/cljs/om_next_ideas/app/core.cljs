@@ -6,6 +6,7 @@
     [om.transit :as ot]
     [om.next :as om :refer-macros [defui]]
     [taoensso.timbre :as log]
+    [devtools.core :as devtools]
 
     [om-next-ideas.core :refer [merge-result-tree]]
     [om-next-ideas.app.mutation-controller :as controller]
@@ -15,6 +16,9 @@
   (:import [goog.net XhrIo]))
 
 (enable-console-print!)
+
+(devtools/set-pref! :install-sanity-hints true)             ; this is optional
+(devtools/install!)
 
 ; set to debug to see components rendering
 (log/set-level! :info)
@@ -44,9 +48,12 @@
        :shared     {:send! parse}
        :parser     (om/parser {:read readf :mutate mutate})
        :send       (transit-post "/api")
-       :merge-tree (pu/portable-merge {:person/name :person/by-id})
+       :merge-tree (pu/portable-merge {:person/name :person/by-id
+                                       :car/name    :car/by-id})
        :id-key     :db/id
        :migrate    pu/portable-tempid-migrate})))
+
+;(pprint (om/get-query v/App))
 
 (om/add-root! reconciler v/App (gdom/getElement "app"))
 

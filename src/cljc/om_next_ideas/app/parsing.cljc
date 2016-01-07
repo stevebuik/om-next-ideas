@@ -25,10 +25,11 @@
              [{:keys [state query target ast] :as env} :- (pu/env-with-query PersonQuery)
               _ _]
              (let [people-absent? (nil? (:people @state))]
-               (cond-> {:value (pu/parse-join-multiple env query :person (:people @state))}
-                       (and (= :remote target) people-absent?) (assoc :remote (assoc ast
-                                                                                :dispatch-key :people
-                                                                                :key :people)))))
+               (case target
+                 nil {:value (pu/parse-join-multiple env query :person (:people @state))}
+                 :remote (when people-absent? {:remote (assoc ast
+                                                         :dispatch-key :people
+                                                         :key :people)}))))
 
 (s/defmethod readf :people-display
              [{:keys [state query target ast] :as env} :- (pu/env-with-query PersonQuery)
@@ -47,14 +48,18 @@
                                cars-join (pu/merge-join-multiple env cars-join :car :person/cars person))}))
 
 (s/defmethod readf :cars
-             [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
+             [{:keys [state query target ast] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (let [car-idents (->> @state :om.next/tables :car/by-id keys (map #(vector :car/id %)))
-                   value (pu/parse-join-multiple env query :car car-idents)]
-               (log/trace "read cars" {:idents car-idents
+             (let [car-idents (->> @state :om.next/tables :car/by-id keys (map #(vector :car/id %)))]
+               (log/trace "read cars" {:target target
+                                       ;:ast    ast
+                                       :idents car-idents
                                        :params params})
-               {:value value}))
+               (case target
+                 nil {:value (pu/parse-join-multiple env query :car car-idents)}
+                 :remote (let [cars-absent? (nil? (:cars @state))]
+                           (when cars-absent? {:remote ast})))))
 
 (s/defmethod readf :car
              [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
@@ -102,6 +107,15 @@
                                            (assoc-in [:om.next/tables :car/by-id car-id]
                                                      {:db/id    car-id
                                                       :car/name name})))))})
+(s/defmethod mutate 'app/save-car
+             [{:keys [state]} _
+              {:keys [db/id car/name]} :- {:db/id                     Id
+                                           (s/optional-key :car/name) s/Str}]
+             {:action (fn []
+                        (swap! state (fn [s]
+                                       (cond-> (dirty! s [:car/by-id id])
+                                               name (assoc-in [:om.next/tables :car/by-id id :car/name]
+                                                              name)))))})
 (s/defmethod mutate 'app/add-person
              [{:keys [state]} _
               {:keys [temp-id person/name]} :- {:temp-id     OmIdent
@@ -126,16 +140,17 @@
                                                cars (assoc-in [:om.next/tables :person/by-id id :person/cars]
                                                               (mapv #(vector :car/by-id %) cars))))))})
 
-(s/defmethod mutate 'app/sync-person
+(s/defmethod mutate 'app/sync
              [{:keys [state ast target]} _
               {:keys [ident]} :- {:ident OmIdent}]
              (case target
                nil {:action (fn []
-                              ; TODO how to stop this re-rendering all people
+                              ; TODO how to stop this re-rendering all people :
+                              ; could be the remote callback causing full re-render, not the optimistic update
                               (swap! state update-in [:ui :dirty] disj ident))}
                ; hydrate the local copy of the person and send it to the remote
-               :remote (let [person (-> ident (pu/normalized->tree (:om.next/tables @state)))]
+               :remote (let [record (-> ident (pu/normalized->tree (:om.next/tables @state)))]
                          {:remote (-> ast
                                       (update-in [:params] dissoc :ident)
-                                      (update-in [:params] merge person))})))
+                                      (update-in [:params] merge record))})))
 

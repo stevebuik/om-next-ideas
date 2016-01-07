@@ -15,6 +15,9 @@
   (s/conditional
     (type= :app/add-car) {:type (s/eq :app/add-car)
                           :name s/Str}
+    (type= :app/edit-car) {:type                  (s/eq :app/edit-car)
+                           :id                    OmIdent
+                           (s/optional-key :name) s/Str}
     (type= :app/add-person) {:type (s/eq :app/add-person)
                              :name s/Str}
     (type= :app/edit-person) {:type                  (s/eq :app/edit-person)
@@ -38,6 +41,10 @@
                          params {:temp-id  (pu/temp-id :car/by-id)
                                  :car/name name}]
                      `[(app/add-car ~params)])
+      :app/edit-car (let [{:keys [id name]} msg
+                          params (cond-> {:db/id (last id)}
+                                         name (assoc :car/name name))]
+                      `[(app/save-car ~params)])
 
       :app/add-person (let [{:keys [name]} msg
                             params {:temp-id     (pu/temp-id :person/by-id)
@@ -55,4 +62,4 @@
                            ; use dirty check to avoid mutations when app first loads and
                            ; each text input generates a blur event as the next one grabs focus
                            (when (dirty? @state-atom id)
-                             `[(app/sync-person ~params)])))))
+                             `[(app/sync ~params)])))))
