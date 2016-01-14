@@ -60,9 +60,11 @@
                                 (remote-parser/parse parser-api)
                                 raise-tempids))
           ; init the root query TODO derive this from portable view components
-          root-query [{:people-edit [:db/id :person/name]}
+          root-query [{:people-edit [:db/id :person/name
+                                     {:person/cars [:db/id :car/name :car/selected]}]}
                       {:people-display [:person/name]}
-                      {:cars [:db/id :car/name]}]]
+                      {:cars [:db/id :car/name]}]
+          db-ids (atom {})]
 
       ; reconciler reads local state to perform first render
       (is (= (read-local root-query nil)
@@ -73,7 +75,8 @@
 
       ; reconciler runs root query passing :remote target to determine if a remote send is required
       (let [remote-query (read-local root-query :remote)]
-        (is (= remote-query [{:people [:db/id :person/name]}
+        (is (= remote-query [{:people [:db/id :person/name
+                                       {:person/cars [:db/id :car/name :car/selected]}]}
                              {:cars [:db/id :car/name]}])
             "root query is transformed (:people-edit -> :people) and sent to remote after initial render")
 
@@ -142,20 +145,23 @@
                 "the new person is not dirty after sync")
 
             ; reconciler gather-sends fn invokes the remote service, migrates the response
-            (let [db-id (-> remote-mutation
-                            mutate-remote!
-                            (migrate-insert! local-state new-person-id))]
+            (let [person-db-id (-> remote-mutation
+                                   mutate-remote!
+                                   (migrate-insert! local-state new-person-id))]
+              (swap! db-ids assoc :person1 person-db-id)
 
               ; reconciler re-reads after the remote response
               (is (= (read-local root-query)
-                     {:people-edit    [{:db/id       db-id
-                                        :person/name "Clark Kent"}]
+                     {:people-edit    [{:db/id       person-db-id
+                                        :person/name "Clark Kent"
+                                        :person/cars []}]
                       :people-display [{:person/name "Clark Kent"}]
                       :cars           []})
                   "queries return the updated id after migrate")))
 
           ; user adds a new car in the UI
           (mutate-local! {:type :app/add-car :name ""} nil)
+
           (let [car-id (->> [{:cars [:db/id :car/name]}] read-local :cars first :db/id)
                 car-ident [:car/by-id (pu/ensure-tempid car-id)]]
             (mutate-local! {:type :app/edit-car
@@ -173,35 +179,75 @@
                                           :car/name "Corvette Stingray"})])
                   "reconciler gather-sends :edit-complete to the remote")
 
-              (let [db-id (-> remote-mutation
-                              mutate-remote!
-                              (migrate-insert! local-state car-id))]
+              (let [corvette-id (-> remote-mutation
+                                    mutate-remote!
+                                    (migrate-insert! local-state car-id))]
 
                 ; reconciler re-reads after the remote response
                 (is (= (read-local [{:cars [:db/id :car/name]}])
-                       {:cars [{:db/id    db-id
+                       {:cars [{:db/id    corvette-id
                                 :car/name "Corvette Stingray"}]})
-                    "queries return the updated car id after migrate"))))
+                    "local queries return the updated car id after migrate")
+
+                ; user selects the car for SuperClark
+                (let [mut-msg {:type     :app/toggle-car
+                               :person   (-> @local-state :people first)
+                               :car      corvette-id
+                               :selected true}]
+
+                  (mutate-local! mut-msg nil)
+
+                  (is (= (read-local [{:people-edit [:person/name
+                                                     {:person/cars [:db/id :car/name :car/selected]}]}])
+                         {:people-edit
+                          [{:person/name "Clark Kent",
+                            :person/cars [{:db/id        corvette-id
+                                           :car/name     "Corvette Stingray",
+                                           :car/selected true}]}]})
+                      "car selection was applied optimistically")
+
+                  (let [remote-mutation (mutate-local! mut-msg :remote)]
+
+                    (is (= remote-mutation `[(app/sync
+                                               {:db/id       ~(:person1 @db-ids)
+                                                :person/name "Clark Kent"
+                                                :person/cars (~corvette-id)})])
+                        "car selection is immediately sent to remote as an app/sync")
+
+                    ; reconciler sends mutation to server
+                    (mutate-remote! remote-mutation)
+
+                    ; NOTE: the server only supports :people (not :people-edit or :people-display) and
+                    ; does not support the :car/selected flag. Instead it just returns only cars that the person
+                    ; owns
+                    (is (= (read-remote [{:people [:person/name
+                                                   {:person/cars [:car/name]}]}])
+                           {:people
+                            [{:person/name "Clark Kent",
+                              :person/cars [{:car/name "Corvette Stingray"}]}]})
+                        "remote query shows person owns car"))))))
 
           (let [person1-db-ident (->> (read-local root-query)
                                       :people-edit first :db/id
                                       (vector :person/by-id))]
+
             ; user changes the person using the db/id
             (mutate-local! {:type :app/edit-person
                             :id   person1-db-ident
                             :name "Superman"} nil)
 
             ; user completes edit of person and reconciler sends to remote
-            (let [remote-update (mutate-local! {:type :app/edit-complete
-                                                :id   person1-db-ident} :remote)]
-              (mutate-local! {:type :app/edit-complete :id person1-db-ident} nil)
+            (let [local-mutation {:type :app/edit-complete
+                                  :id   person1-db-ident}
+                  remote-update (mutate-local! local-mutation :remote)]
+              (mutate-local! local-mutation nil)
               (mutate-remote! remote-update))
 
             (is (nil? (mutate-local! {:type :app/edit-complete
                                       :id   person1-db-ident} nil))
                 "no mutations generated by controller when record is clean")
 
-            ; checking that remote parser updates and doesn't insert
+            ; checking that remote parser updated and didn't insert. this was an early bug
             (is (= (read-remote [{:people [:person/name]}])
                    {:people [{:person/name "Superman"}]})
                 "remote write updates existing person")))))))

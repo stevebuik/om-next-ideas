@@ -26,7 +26,7 @@
                   :auto-focus true
                   :type       "text"
                   :on-change  #(send! this :app/edit-car {:id   (om/get-ident this)
-                                                             :name (.. % -target -value)})
+                                                          :name (.. % -target -value)})
                   :on-blur    #(send! this :app/edit-complete {:id (om/get-ident this)})}]]))))
 
 (defui PersonEditor
@@ -35,11 +35,12 @@
     [:person/by-id id])
   static om/IQuery
   (query [_]
-    [:db/id :person/name])
+    [:db/id :person/name
+     {:person/cars [:db/id :car/name :car/selected]}])
   Object
   (render [this]
     (let [{:keys [send!]} (om/shared this)
-          {:keys [person/name]} (om/props this)]
+          {:keys [person/name person/cars]} (om/props this)]
       (log/debug :render-person-editor (om/props this))
       (html
         [:div
@@ -48,7 +49,20 @@
                   :type       "text"
                   :on-change  #(send! this :app/edit-person {:id   (om/get-ident this)
                                                              :name (.. % -target -value)})
-                  :on-blur    #(send! this :app/edit-complete {:id (om/get-ident this)})}]]))))
+                  :on-blur    #(send! this :app/edit-complete {:id (om/get-ident this)})}]
+         [:div {:style #js {:float "left"}}
+          (map (fn [{:keys [db/id car/name car/selected]}]
+                 [:div {:style #js {:float "left"}}
+                  [:input {:type      "checkbox"
+                           :value     id
+                           :checked   selected
+                           :on-change #(send! this :app/toggle-car {:person (om/get-ident this)
+                                                                    :car    id
+                                                                    :selected (.. % -target -checked)})}]
+                  [:span {:style #js {:marginRight "10px"}} name]])
+               cars)]
+         [:div {:style #js {:clear   "both"
+                            :padding "5px"}} " "]]))))
 
 (defui PersonDisplay
   static om/Ident
@@ -62,10 +76,10 @@
     (let [{:keys [person/name]} (om/props this)]
       (log/debug :render-person-display (om/props this))
       (html
-        [:div {:style #js {:paddingBottom "1px"}} name]))))
+        [:div {:style #js {:paddingBottom "25px"}} name]))))
 
 (def car-edit (om/factory CarEditor))
-(def person-edit (om/factory PersonEditor))
+(def person-edit (om/factory PersonEditor {:keyfn :db/id}))
 (def person-display (om/factory PersonDisplay))
 
 (defui App
@@ -86,11 +100,14 @@
         [:div
          [:div
           [:p "Instructions"]
+          [:p "These steps roughly follow the steps in the integration test"]
           [:ol
            [:li "Click 'New Person' to add a new record"]
            [:li "Then edit the record and see the re-renders on the right side"]
            [:li "Move the focus off the input to see the remote sync of the local record"]
-           [:li "Re-focus on the input but make no changes. Move focus and notice no remote sync i.e. not dirty"]]]
+           [:li "Re-focus on the input but make no changes. Move focus and notice no remote sync i.e. not dirty"]
+           [:li "Add a car and move focus off to see the save"]
+           [:li "Select and de-select the car for a person and notice the remote save for each change"]]]
          [:div
           [:h2 "People"]
           [:a {:href     "#"

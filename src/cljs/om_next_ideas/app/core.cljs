@@ -12,13 +12,14 @@
     [om-next-ideas.app.mutation-controller :as controller]
     [om-next-ideas.parsing-utils :as pu :refer [readf mutate]]
     [om-next-ideas.app.parsing]
-    [om-next-ideas.app.views :as v])
+    [om-next-ideas.app.views :as v]
+    [schema.core :as s])
   (:import [goog.net XhrIo]))
 
 (enable-console-print!)
 
 (devtools/set-pref! :install-sanity-hints true)             ; this is optional
-(devtools/install!)
+(defonce dt (devtools/install!))
 
 ; set to debug to see components rendering
 (log/set-level! :info)

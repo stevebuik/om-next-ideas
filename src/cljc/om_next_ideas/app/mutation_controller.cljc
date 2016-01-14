@@ -4,7 +4,7 @@
        :cljs [cljs.pprint :refer [pprint]])
             [schema.core :as s]
             [om-next-ideas.parsing-utils :as pu]
-            [om-next-ideas.core :refer [OmIdent]]))
+            [om-next-ideas.core :refer [Id OmIdent]]))
 
 ; the mutation message translation layer for the client/app parser
 
@@ -24,6 +24,10 @@
                               :id                    OmIdent
                               (s/optional-key :name) s/Str
                               (s/optional-key :cars) [OmIdent]}
+    (type= :app/toggle-car) {:type     (s/eq :app/toggle-car)
+                             :person   OmIdent
+                             :car      Id
+                             :selected s/Bool}
     (type= :app/edit-complete) {:type (s/eq :app/edit-complete)
                                 :id   OmIdent}))
 
@@ -31,10 +35,12 @@
   [state ident]
   (contains? (get-in state [:ui :dirty]) ident))
 
-(s/defn ^:always-validate message->mutation
+(s/defn message->mutation
   "HOF closing over app state to allow state aware mutation generation"
   [state-atom]
-  (s/fn [msg :- Message]
+  (s/fn ^:always-validate [msg :- Message]
+    ; ^:always-validate doesn't seem to operate when running in cljs so....
+    (s/validate Message msg)
     (case (:type msg)
 
       :app/add-car (let [{:keys [name]} msg
@@ -56,6 +62,12 @@
                                             name (assoc :person/name name)
                                             cars (assoc :person/cars (map last cars)))]
                          `[(app/save-person ~params) {:people-display [:db/id :person/name]}])
+
+      :app/toggle-car (let [{:keys [person car selected]} msg
+                            params {:db/id    (last person)
+                                    :car      [:car/by-id car]
+                                    :selected selected}]
+                        `[(app/toggle-car ~params)])
 
       :app/edit-complete (let [{:keys [id]} msg
                                params {:ident id}]

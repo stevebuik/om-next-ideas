@@ -53,8 +53,9 @@
 (s/defn type= [t] (fn [m] (= t (map-type m))))
 
 (s/defschema SyncableMap (s/conditional
-                           (type= :person) {:db/id       Id
-                                            :person/name s/Str}
+                           (type= :person) {:db/id                        Id
+                                            :person/name                  s/Str
+                                            (s/optional-key :person/cars) [Id]}
                            (type= :car) {:db/id    Id
                                          :car/name s/Str}))
 
@@ -66,7 +67,7 @@
                         (let [is-update? (number? id)
                               db-id (if is-update? id (d/tempid :db.part/user))
                               entity-keys (case (map-type params)
-                                            :person [:person/name]
+                                            :person [:person/name :person/cars]
                                             :car [:car/name])
                               p (assoc
                                   (select-keys params entity-keys)

@@ -128,4 +128,3 @@
          :car/name      :car/by-id
          :engine/torque :engine/by-id}))))
 
-; #?(:clj (run-tests))

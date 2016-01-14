@@ -12,7 +12,8 @@
 (s/defschema EngineQuery [(s/enum :db/id :engine/torque :engine/hp)])
 
 (s/defschema CarQuery [(s/conditional
-                         keyword? (s/enum :db/id :car/name)
+                         ; TODO if :car/selected is included then :db/id must also be present
+                         keyword? (s/enum :db/id :car/name :car/selected)
                          map? {:car/engine EngineQuery})])
 
 (s/defschema PersonQuery [(s/conditional
@@ -42,24 +43,38 @@
               params]
              (let [person (pu/get-linked env params :person/by-id :person)
                    cars-join (pu/get-sub-query env :person/cars)]
-               (log/trace "read person" {:person person
-                                         :cj     cars-join})
-               {:value (cond-> (select-keys person (filterv keyword? query))
-                               cars-join (pu/merge-join-multiple env cars-join :car :person/cars person))}))
+               (log/trace :read-person {:person person
+                                        :cj     cars-join
+                                        :cars   (:cars @state)})
+               {:value (-> person                           ; denormalized record with all fields
+                           (select-keys (filterv keyword? query)) ; only return fields listed in the query
+                           (cond->                          ; apply any joins
+
+                             ; cars join for person means all known cars with a :car/selected flag
+                             ; supported if included in the query
+                             cars-join (assoc :person/cars
+                                              (let [all-cars (:cars @state)
+                                                    car-ids-owned (->> person :person/cars (map last) set)
+                                                    selected-in-query (contains? (set cars-join) :car/selected)]
+                                                (cond->>
+                                                  (pu/parse-join-multiple (assoc env :parent-type :person)
+                                                                          cars-join
+                                                                          :car all-cars)
+                                                  selected-in-query (mapv #(assoc % :car/selected
+                                                                                    (contains? car-ids-owned (:db/id %)))))))))}))
 
 (s/defmethod readf :cars
-             [{:keys [state query target ast] :as env} :- (pu/env-with-query CarQuery)
+             [{:keys [state query target ast parent-type] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (let [car-idents (->> @state :om.next/tables :car/by-id keys (map #(vector :car/id %)))]
-               (log/trace "read cars" {:target target
-                                       ;:ast    ast
-                                       :idents car-idents
-                                       :params params})
+             (assert (let [selected-in-query (contains? (set query) :car/selected)]
+                       (or (and selected-in-query (= :person parent-type))
+                           (and (not selected-in-query) (nil? parent-type))))
+                     ":car/selected only allowed inside a :person join query")
+             (let [all-cars (:cars @state)]
                (case target
-                 nil {:value (pu/parse-join-multiple env query :car car-idents)}
-                 :remote (let [cars-absent? (nil? (:cars @state))]
-                           (when cars-absent? {:remote ast})))))
+                 nil {:value (pu/parse-join-multiple env query :car all-cars)}
+                 :remote (when (nil? all-cars) {:remote ast}))))
 
 (s/defmethod readf :car
              [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
@@ -68,6 +83,7 @@
              (let [car (pu/get-linked env params :car/by-id :car)
                    engine-join (pu/get-sub-query env :car/engine)]
                (log/trace "read car" {:car    car
+                                      :query  query
                                       :ej     engine-join
                                       :params params})
                {:value (cond-> (select-keys car query)
@@ -106,7 +122,8 @@
                                            (dirty! ident)
                                            (assoc-in [:om.next/tables :car/by-id car-id]
                                                      {:db/id    car-id
-                                                      :car/name name})))))})
+                                                      :car/name name})
+                                           (update-in [:cars] conj ident)))))})
 (s/defmethod mutate 'app/save-car
              [{:keys [state]} _
               {:keys [db/id car/name]} :- {:db/id                     Id
@@ -129,16 +146,33 @@
 
 (s/defmethod mutate 'app/save-person
              [{:keys [state]} _
-              {:keys [db/id person/cars person/name]} :- {:db/id                        Id
-                                                          (s/optional-key :person/name) s/Str
-                                                          (s/optional-key :person/cars) [Id]}]
+              {:keys [db/id person/name selection]} :- {:db/id                        Id
+                                                        (s/optional-key :person/name) s/Str}]
              {:action (fn []
                         (swap! state (fn [s]
                                        (cond-> (dirty! s [:person/by-id id])
                                                name (assoc-in [:om.next/tables :person/by-id id :person/name]
-                                                              name)
-                                               cars (assoc-in [:om.next/tables :person/by-id id :person/cars]
-                                                              (mapv #(vector :car/by-id %) cars))))))})
+                                                              name)))))})
+
+(s/defmethod mutate 'app/toggle-car
+             [{:keys [state target ast]} _
+              {:keys [db/id car selected]} :- {:db/id    Id
+                                               :car      OmIdent
+                                               :selected s/Bool}]
+             (case target
+               nil {:action #(swap! state update-in [:om.next/tables :person/by-id id :person/cars]
+                                    (fn [car-idents]
+                                      (vec (if selected
+                                             (conj car-idents car)
+                                             (remove #{car} car-idents)))))}
+               :remote (let [person (-> @state :om.next/tables :person/by-id (get id))
+                             car-ids (map last (:person/cars person))]
+                         {:remote (-> ast
+                                      (merge {:dispatch-key 'app/sync
+                                              :key          'app/sync})
+                                      (assoc-in [:params] {:db/id       id
+                                                           :person/name (:person/name person)
+                                                           :person/cars car-ids}))})))
 
 (s/defmethod mutate 'app/sync
              [{:keys [state ast target]} _
@@ -150,7 +184,5 @@
                               (swap! state update-in [:ui :dirty] disj ident))}
                ; hydrate the local copy of the person and send it to the remote
                :remote (let [record (-> ident (pu/normalized->tree (:om.next/tables @state)))]
-                         {:remote (-> ast
-                                      (update-in [:params] dissoc :ident)
-                                      (update-in [:params] merge record))})))
+                         {:remote (assoc-in ast [:params] (dissoc record :person/cars))})))
 
