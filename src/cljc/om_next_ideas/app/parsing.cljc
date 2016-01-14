@@ -63,14 +63,17 @@
                                                   selected-in-query (mapv #(assoc % :car/selected
                                                                                     (contains? car-ids-owned (:db/id %)))))))))}))
 
+(defn- is-selected-allowed?
+  [{:keys [query parent-type]}]
+  (let [selected-in-query (contains? (set query) :car/selected)]
+    (or (and selected-in-query (= :person parent-type))
+        (and (not selected-in-query) (nil? parent-type)))))
+
 (s/defmethod readf :cars
              [{:keys [state query target ast parent-type] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (assert (let [selected-in-query (contains? (set query) :car/selected)]
-                       (or (and selected-in-query (= :person parent-type))
-                           (and (not selected-in-query) (nil? parent-type))))
-                     ":car/selected only allowed inside a :person join query")
+             (assert (is-selected-allowed? env) ":car/selected only allowed inside a :person join query")
              (let [all-cars (:cars @state)]
                (case target
                  nil {:value (pu/parse-join-multiple env query :car all-cars)}
@@ -80,6 +83,7 @@
              [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
+             (assert (is-selected-allowed? env) ":car/selected only allowed inside a :person join query")
              (let [car (pu/get-linked env params :car/by-id :car)
                    engine-join (pu/get-sub-query env :car/engine)]
                (log/trace "read car" {:car    car
@@ -113,17 +117,15 @@
 
 (s/defmethod mutate 'app/add-car
              [{:keys [state]} _
-              {:keys [car/name car/engine]}]
+              {:keys [temp-id car/name car/engine]} :- {:temp-id  OmIdent
+                                                        :car/name s/Str}]
              {:action (fn []
-                        ; FIXME remove tempid creation from here. should be in controller
-                        (swap! state #(let [ident (pu/temp-id :car/by-id)
-                                            [_ car-id] ident]
-                                       (-> %
-                                           (dirty! ident)
-                                           (assoc-in [:om.next/tables :car/by-id car-id]
-                                                     {:db/id    car-id
-                                                      :car/name name})
-                                           (update-in [:cars] conj ident)))))})
+                        (swap! state #(-> %
+                                          (dirty! temp-id)
+                                          (assoc-in (concat [:om.next/tables] temp-id)
+                                                    {:db/id    (last temp-id)
+                                                     :car/name name})
+                                          (update-in [:cars] conj temp-id))))})
 (s/defmethod mutate 'app/save-car
              [{:keys [state]} _
               {:keys [db/id car/name]} :- {:db/id                     Id
