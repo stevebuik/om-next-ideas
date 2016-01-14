@@ -8,11 +8,22 @@
     [datomic.api :as d]
     [taoensso.timbre :as log]))
 
+(s/defschema EngineQuery [(s/enum :db/id :engine/torque :engine/hp)])
+
+(s/defschema CarQuery [(s/conditional
+                         keyword? (s/enum :db/id :car/name)
+                         map? {:car/engine EngineQuery})])
+
+(s/defschema PersonQuery [(s/conditional
+                            keyword? (s/enum :db/id :person/name)
+                            map? {:person/cars CarQuery})])
+
+
 ; read fns
 
 (s/defmethod readf :people
              [{:keys [db query]} _ params]
-             ; TODO use a schema to validate query sent from client
+             (s/validate PersonQuery query)
              (let [q '[:find [(pull ?p selector) ...]
                        :in $ selector
                        :where
@@ -25,7 +36,7 @@
 
 (s/defmethod readf :cars
              [{:keys [db query]} _ params]
-             ; TODO use a schema to validate query sent from client
+             (s/validate CarQuery query)
              (let [q '[:find [(pull ?p selector) ...]
                        :in $ selector
                        :where

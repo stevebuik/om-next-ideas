@@ -5,7 +5,8 @@
             [schema.core :as s]
             [om-next-ideas.core :refer [Id OmIdent]]
             [om-next-ideas.parsing-utils :as pu :refer [readf mutate]]
-            [taoensso.timbre :as log]))
+            [taoensso.timbre :as log]
+            [clojure.walk :as wlk]))
 
 ; SCHEMAS
 
@@ -22,15 +23,27 @@
 
 ; READ
 
+(s/defn sanitize
+  "remove any client-only keys from an ast so that it can be sent to the remote"
+  [query]
+  (wlk/postwalk (fn [n]
+                  (cond
+                    (and (vector? n)
+                         (not= :key (first n))
+                         (not= :dispatch-key (first n))) (vec (remove #{:car/selected} n))
+                    :else n))
+                query))
+
 (s/defmethod readf :people-edit
              [{:keys [state query target ast] :as env} :- (pu/env-with-query PersonQuery)
               _ _]
              (let [people-absent? (nil? (:people @state))]
                (case target
                  nil {:value (pu/parse-join-multiple env query :person (:people @state))}
-                 :remote (when people-absent? {:remote (assoc ast
-                                                         :dispatch-key :people
-                                                         :key :people)}))))
+                 :remote (when people-absent? {:remote (-> ast
+                                                           (assoc :dispatch-key :people
+                                                                  :key :people)
+                                                           sanitize)}))))
 
 (s/defmethod readf :people-display
              [{:keys [state query target ast] :as env} :- (pu/env-with-query PersonQuery)
@@ -69,11 +82,15 @@
     (or (and selected-in-query (= :person parent-type))
         (and (not selected-in-query) (nil? parent-type)))))
 
+(defn- validate-car-query!
+  [env]
+  (assert (is-selected-allowed? env) ":car/selected only allowed inside a :person join query"))
+
 (s/defmethod readf :cars
              [{:keys [state query target ast parent-type] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (assert (is-selected-allowed? env) ":car/selected only allowed inside a :person join query")
+             (validate-car-query! env)
              (let [all-cars (:cars @state)]
                (case target
                  nil {:value (pu/parse-join-multiple env query :car all-cars)}
@@ -83,7 +100,7 @@
              [{:keys [state query] :as env} :- (pu/env-with-query CarQuery)
               _
               params]
-             (assert (is-selected-allowed? env) ":car/selected only allowed inside a :person join query")
+             (validate-car-query! env)
              (let [car (pu/get-linked env params :car/by-id :car)
                    engine-join (pu/get-sub-query env :car/engine)]
                (log/trace "read car" {:car    car

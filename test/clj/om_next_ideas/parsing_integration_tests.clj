@@ -76,7 +76,7 @@
       ; reconciler runs root query passing :remote target to determine if a remote send is required
       (let [remote-query (read-local root-query :remote)]
         (is (= remote-query [{:people [:db/id :person/name
-                                       {:person/cars [:db/id :car/name :car/selected]}]}
+                                       {:person/cars [:db/id :car/name]}]}
                              {:cars [:db/id :car/name]}])
             "root query is transformed (:people-edit -> :people) and sent to remote after initial render")
 
